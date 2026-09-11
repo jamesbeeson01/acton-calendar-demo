@@ -8,6 +8,7 @@ Shared names for UI elements in this prototype.
 |---|---|---|
 | **Change Times link** | Clock icon on Badge Overview, next to the Start Date editor; opens Change Dates | `a.btn-icon[data-tooltip="Change Times & Date"]` |
 | **Back link** | "‹ Back to badge" breadcrumb at the top of Change Dates; opens Badge Overview | `a.breadcrumb-link` |
+| **Change Dates button** | "Change Times & Date" button centred over the Overview calendar, shown while the calendar is hovered or the button has keyboard focus, and hidden while the calendar shows its empty message. Opens Change Dates with the Start Date editor's current Start Date and Delivery Days filled in, saved or not (see Prefill parameters). | `.overview-cal-open`, `[data-overview-cal-target="open"]` |
 
 ## Overlays
 
@@ -15,12 +16,18 @@ Shared names for UI elements in this prototype.
 |---|---|---|
 | **Copy notice** | Dark pill fixed at the bottom centre of both pages saying this is a prototype copy, not a real Journey Tracker page. Clicks pass through it; hidden when printing. | `.copy-notice` |
 
+## Layout
+
+| Term | What it is | Code hook |
+|---|---|---|
+| **Block** | Change Dates: a rounded, bordered box holding a group of controls. The first Block (grey) holds Start Date, Quest Delivery Days, Apply Changes To and Day Mappings. Each Time group below it (white) is also a Block, holding Before time, After time and Preview challenges. On Badge Overview the lookalike box is a Section, not a Block. | `#bulk-time-change-body .rounded-xl.border-border-1` |
+
 ## Schedule rows
 
 | Term | What it is | Code hook |
 |---|---|---|
 | **Section** | Card grouping Schedule rows under a header (Badge Overview). Change Dates shows no Section cards, but every row still sits inside an element carrying its section id. | `article.milestone`; section id on both pages: `[data-milestone-id]` |
-| **Time group** | Change Dates card of rows sharing a due time | `[data-target="bulk-time-change.timeGroup"]` |
+| **Time group** | Change Dates Block of rows sharing a due time | `[data-target="bulk-time-change.timeGroup"]` |
 | **Preview item** | Change Dates wrapper around a Schedule row and its checkbox; its data attributes repeat the row's date, time and day | `[data-bulk-time-change-target="challengeItem"]` |
 | **Schedule row** | A launch or challenge row with a due date (both pages) | `article.cl-row[data-due-date]` |
 | **Launch row** / **Challenge row** / **Close row** | Schedule row of that type. A Close row also has the `launch` class, so check `close-challenge` first. | `.cl-row.launch` / `.cl-row.badge-task` / `.cl-row.close-challenge` |
@@ -61,6 +68,12 @@ Shared names for UI elements in this prototype.
 | **Rows view** | One dot per Schedule row under its date, coloured like its Type pill. Only the Start Date is filled. | `.overview-cal[data-view="rows"]` |
 | **Row dot** | One row's dot: launch purple, challenge blue, close grey | `.overview-cal-dot--launch` / `--challenge` / `--close` |
 | **Type legend** | Key under the calendar in Rows view, listing only the types shown | `[data-overview-cal-target="legend"]` |
+
+## Change Dates prefill (Change Dates only, `change-dates-page.js`)
+
+| Term | What it is | Code hook |
+|---|---|---|
+| **Prefill parameters** | `?start_date=YYYY-MM-DD&delivery_days=monday,tuesday` on the Change Dates URL, set by the Change Dates button. On load they fill the Start Date field and Quest Delivery Days checkboxes without saving: the Schedule store and every row's date stay as they were. An empty `start_date` clears the field; an invalid date is ignored, as are unknown day names. The store rewrites these fields on its next change. | `start_date` / `delivery_days` query parameters |
 
 ## Schedule store (both pages, `schedule-store.js`)
 

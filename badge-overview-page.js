@@ -32,7 +32,16 @@
     '.overview-cal-view{display:inline-flex;padding:2px}' +
     '.overview-cal-view button{background:transparent;border:0;border-radius:var(--radius-pill);color:var(--fg-3);cursor:pointer;font-size:11px;font-weight:var(--weight-semibold);line-height:1;padding:4px 10px}' +
     '.overview-cal-view button[aria-pressed="true"]{background:var(--bg-surface);box-shadow:var(--shadow-xs);color:var(--fg-1)}' +
-    '.overview-cal{background:var(--bg-surface);border:1px solid var(--border-1);border-radius:8px;padding:2px 4px 4px}' +
+    '.overview-cal{background:var(--bg-surface);border:1px solid var(--border-1);border-radius:8px;padding:2px 4px 4px;position:relative}' +
+    // Change Dates button: centred over the calendar while it is hovered or the
+    // button has keyboard focus. Styled like the Change Times link's .btn-icon;
+    // the page's own .btn rules were pruned from this export.
+    '.overview-cal-open{align-items:center;background:var(--bg-surface);border:1px solid var(--border-2);border-radius:var(--radius-pill);box-shadow:var(--shadow-md);display:inline-flex;font-size:12px;font-weight:var(--weight-semibold);gap:6px;left:50%;line-height:1;opacity:0;padding:7px 12px;pointer-events:none;position:absolute;text-decoration:none;top:50%;transform:translate(-50%,-50%);transition:opacity .12s ease,background-color .12s ease;white-space:nowrap}' +
+    '.overview-cal-open:link,.overview-cal-open:visited{color:var(--fg-1)}' +
+    '.overview-cal:hover .overview-cal-open,.overview-cal-open:focus-visible{opacity:1;pointer-events:auto}' +
+    '.overview-cal-open:hover{background:var(--bg-subtle);text-decoration:none}' +
+    '.overview-cal-open:focus-visible{box-shadow:var(--ring-focus),var(--shadow-md);outline:0}' +
+    '.overview-cal-open svg{color:var(--fg-2);flex:none}' +
     '.overview-cal-grid{display:grid;grid-template-columns:26px repeat(7,minmax(26px,1fr));text-align:center}' +
     '.overview-cal-month{align-self:center;color:var(--fg-3);font-size:10px;font-weight:var(--weight-semibold);letter-spacing:.05em;text-transform:uppercase}' +
     '.overview-cal-d{align-items:center;display:flex;flex-direction:column;gap:2px;height:28px;justify-content:center}' +
@@ -423,6 +432,16 @@
     };
   }
 
+  // Same icon, label and page as the Change Times link.
+  var CLOCK_SVG_14 = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"></circle><path d="M12 8v4l2.5 2.5"></path></svg>';
+  var CHANGE_DATES_URL = 'Journey%20Tracker%20Change%20Dates%20Page.html';
+
+  // change-dates-page.js reads these to fill its Start Date field and Quest
+  // Delivery Days.
+  function changeDatesURL(startISO, deliveryDays) {
+    return CHANGE_DATES_URL + '?start_date=' + (startISO || '') + '&delivery_days=' + deliveryDays.join(',');
+  }
+
   function buildOverviewCalendarHTML() {
     return '' +
       '<div class="overview-cal-edit pt-[10px] border-t border-[#e2e8f0]">' +
@@ -437,6 +456,7 @@
       '<div class="overview-cal" data-overview-cal-target="card">' +
       '<div class="overview-cal-grid" data-overview-cal-target="grid"></div>' +
       '<p class="overview-cal-empty" data-overview-cal-target="empty"></p>' +
+      '<a class="overview-cal-open" data-overview-cal-target="open" href="' + CHANGE_DATES_URL + '">' + CLOCK_SVG_14 + 'Change Times &amp; Date</a>' +
       '</div>' +
       '<div class="overview-cal-legend" data-overview-cal-target="legend"></div>' +
       '</div>';
@@ -475,6 +495,7 @@
     var empty = el.querySelector('[data-overview-cal-target="empty"]');
     var range = el.querySelector('[data-overview-cal-target="range"]');
     var legend = el.querySelector('[data-overview-cal-target="legend"]');
+    var open = el.querySelector('[data-overview-cal-target="open"]');
     var viewBtns = el.querySelectorAll('[data-overview-cal-view]');
 
     var view = 'days';
@@ -507,6 +528,9 @@
       empty.textContent = message;
       empty.style.display = message ? '' : 'none';
       grid.style.display = message ? 'none' : '';
+      // Hidden with the message, which it would cover.
+      open.style.display = message ? 'none' : '';
+      open.href = changeDatesURL(startISO, deliveryDays);
       grid.innerHTML = '';
       range.textContent = '';
       legend.innerHTML = '';
