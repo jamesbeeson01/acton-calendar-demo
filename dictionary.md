@@ -9,6 +9,12 @@ Shared names for UI elements in this prototype.
 | **Change Times link** | Clock icon on Badge Overview, next to the Start Date editor; opens Change Dates | `a.btn-icon[data-tooltip="Change Times & Date"]` |
 | **Back link** | "‹ Back to badge" breadcrumb at the top of Change Dates; opens Badge Overview | `a.breadcrumb-link` |
 
+## Overlays
+
+| Term | What it is | Code hook |
+|---|---|---|
+| **Copy notice** | Dark pill fixed at the bottom centre of both pages saying this is a prototype copy, not a real Journey Tracker page. Clicks pass through it; hidden when printing. | `.copy-notice` |
+
 ## Schedule rows
 
 | Term | What it is | Code hook |

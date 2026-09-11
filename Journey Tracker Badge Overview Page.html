@@ -397,6 +397,15 @@
  
 </div>
  </div>
+ <style>
+ .copy-notice{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:1050;max-width:calc(100% - 32px);display:flex;align-items:center;gap:8px;padding:8px 16px;border-radius:9999px;background-color:var(--bg-inverse);color:var(--bg-surface);box-shadow:var(--shadow-lg);font-family:var(--font-body);font-size:13px;font-weight:500;line-height:1.35;pointer-events:none}
+ .copy-notice svg{flex-shrink:0;opacity:.8}
+ @media print{.copy-notice{display:none}}
+ </style>
+ <div class=copy-notice role=note>
+ <svg width=16 height=16 viewBox="0 0 24 24" fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round aria-hidden=true><circle cx=12 cy=12 r=10></circle><line x1=12 y1=16 x2=12 y2=12></line><line x1=12 y1=8 x2=12.01 y2=8></line></svg>
+ <span>This is a copy for prototyping, not a real Journey Tracker page. Nothing here changes Journey Tracker.</span>
+ </div>
  <div id=flash-message class="fixed bottom-6 right-6 z-[1100] max-w-md pointer-events-none print:hidden">
  
 </div>
