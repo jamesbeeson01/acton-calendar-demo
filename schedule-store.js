@@ -220,11 +220,16 @@
     return n;
   }
 
-  function dateForScheduledDay(day) {
-    if (!state.startDate || !state.deliveryDays.length || !day) return null;
+  // settings: optional { startDate, deliveryDays } to count with instead of the
+  // saved schedule, e.g. to preview Start Date editor choices before Save.
+  function dateForScheduledDay(day, settings) {
+    var startDate = settings ? settings.startDate : state.startDate;
+    // weekOrder drops anything that isn't a weekday name, so the loop always ends.
+    var days = settings ? weekOrder(settings.deliveryDays || []) : state.deliveryDays;
+    if (!startDate || !ISO_DATE.test(startDate) || !days.length || !day) return null;
     var step = day > 0 ? 1 : -1, n = 0;
-    for (var d = day > 0 ? state.startDate : addDays(state.startDate, -1); ; d = addDays(d, step)) {
-      if (isDeliveryDay(d)) { n += step; if (n === day) return d; }
+    for (var d = day > 0 ? startDate : addDays(startDate, -1); ; d = addDays(d, step)) {
+      if (days.indexOf(weekdayOf(d)) !== -1) { n += step; if (n === day) return d; }
     }
   }
 
