@@ -243,20 +243,38 @@
     listeners.slice().forEach(function (fn) { fn(change); });
   }
 
-  // changes: { dueDate: 'YYYY-MM-DD', dueTime: 'HH:MM', scheduledDay: n }, all optional.
-  // A new dueDate recalculates scheduledDay unless one is passed too.
-  function updateRow(id, changes) {
-    var row = state.rows[id];
-    if (!row) throw new Error('Unknown schedule row: ' + id);
+  function checkRowChanges(id, changes) {
+    if (!state.rows[id]) throw new Error('Unknown schedule row: ' + id);
     if ('dueDate' in changes && !ISO_DATE.test(changes.dueDate)) throw new Error('dueDate must be YYYY-MM-DD');
     if ('dueTime' in changes && !TIME.test(changes.dueTime)) throw new Error('dueTime must be HH:MM');
+  }
+
+  function applyRowChanges(id, changes) {
+    var row = state.rows[id];
     if ('dueDate' in changes) row.dueDate = changes.dueDate;
     if ('dueTime' in changes) row.dueTime = changes.dueTime;
     if (row.dueDate && !row.dueTime) row.dueTime = '00:00';
     if ('scheduledDay' in changes) row.scheduledDay = changes.scheduledDay;
     else if ('dueDate' in changes) row.scheduledDay = scheduledDayFor(row.dueDate);
+  }
+
+  // changes: { dueDate: 'YYYY-MM-DD', dueTime: 'HH:MM', scheduledDay: n }, all optional.
+  // A new dueDate recalculates scheduledDay unless one is passed too.
+  function updateRow(id, changes) {
+    checkRowChanges(id, changes);
+    applyRowChanges(id, changes);
     commit({ type: 'row', rowId: id });
-    return copy(row);
+    return copy(state.rows[id]);
+  }
+
+  // list: [{ id, dueDate, dueTime, scheduledDay }], each entry like updateRow's
+  // changes. Applied as one change, so moving a whole date on a calendar saves,
+  // renders and notifies once, and can be undone in one step. Nothing is
+  // applied unless every entry is valid.
+  function updateRows(list) {
+    list.forEach(function (changes) { checkRowChanges(changes.id, changes); });
+    list.forEach(function (changes) { applyRowChanges(changes.id, changes); });
+    commit({ type: 'rows', rowIds: list.map(function (changes) { return changes.id; }) });
   }
 
   // changes: { startDate: 'YYYY-MM-DD' | null, deliveryDays: ['monday', ...] }, both optional.
@@ -306,6 +324,8 @@
     // Rows present on this page, in page order.
     getRows: function () { return rowOrder.map(function (id) { return copy(state.rows[id]); }); },
     getRow: function (id) { return copy(state.rows[id]); },
+    // The row as the page's markup has it, before any stored change.
+    getOriginalRow: function (id) { return copy(seed.rows[id]); },
     // Rows present on this page, in their order within the section.
     getRowsInSection: function (sectionId) {
       return rowOrder.map(function (id) { return state.rows[id]; })
@@ -318,9 +338,11 @@
       return row ? window.JourneySchedule.getSection(row.sectionId) : null;
     },
     updateRow: updateRow,
+    updateRows: updateRows,
     scheduledDayFor: scheduledDayFor,
     dateForScheduledDay: dateForScheduledDay,
-    // fn({ type: 'row' | 'schedule' | 'reset', rowId }); returns an unsubscribe function.
+    // fn({ type: 'row' | 'rows' | 'schedule' | 'reset', rowId, rowIds }); returns
+    // an unsubscribe function.
     subscribe: function (fn) {
       listeners.push(fn);
       return function () { listeners = listeners.filter(function (l) { return l !== fn; }); };
