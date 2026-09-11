@@ -13,6 +13,7 @@ Shared names for UI elements in this prototype.
 
 | Term | What it is | Code hook |
 |---|---|---|
+| **Section** | Card grouping Schedule rows under a header (Badge Overview). Change Dates has none; its rows are grouped by time instead (`[data-target^="bulk-time-change.challengesList"]`). | `article.milestone` |
 | **Schedule row** | A launch or challenge row with a due date (both pages) | `article.cl-row[data-due-date]` |
 | **Launch row** / **Challenge row** | Schedule row of that type | `.cl-row.launch` / `.cl-row.badge-task` |
 | **Type pill** | "LAUNCH" / "CHALLENGE" label on a row | `.cl-pill--launch` / `.cl-pill--challenge` |
