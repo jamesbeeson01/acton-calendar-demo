@@ -408,9 +408,12 @@
       field.insertAdjacentHTML('afterend', buildSaveCancelHTML());
     }
     var cancelBtn = editMode.querySelector('[data-action*="inline-date-editor#cancel"]');
+    var dayCheckboxes = editMode.querySelectorAll('[data-inline-date-editor-target="dayCheckbox"]');
 
+    // schedule-store.js owns the start date when it's loaded.
+    var schedule = window.JourneySchedule;
     var originalISO = wrap.dataset.inlineDateEditorOriginalStartAtValue || null;
-    var currentISO = originalISO;
+    var currentISO = schedule ? schedule.getStartDate() : originalISO;
 
     displayMode.innerHTML = buildDisplayPillHTML(currentISO ? formatShort(currentISO) : 'Pick a date', 'confirm_clear_start_date_modal');
     displayMode.querySelector('[data-action*="inline-date-editor#enterEditMode"]').addEventListener('click', function (e) {
@@ -422,6 +425,11 @@
 
     function openEdit() {
       datePicker.resetTo(currentISO);
+      // Show the saved delivery days, discarding any change that was cancelled.
+      if (schedule) {
+        var days = schedule.getDeliveryDays();
+        dayCheckboxes.forEach(function (box) { box.checked = days.indexOf(box.value) !== -1; });
+      }
       displayMode.classList.add('hidden', 'sf-hidden');
       editMode.classList.remove('hidden', 'sf-hidden');
     }
@@ -443,12 +451,33 @@
     // The static capture froze this widget mid-edit; always boot collapsed.
     closeEdit();
 
+    function showStartDate() {
+      displayMode.querySelector('.pill-date-text').textContent = currentISO ? formatShort(currentISO) : 'Pick a date';
+    }
+
     if (form) {
       form.addEventListener('submit', function (e) {
         e.preventDefault();
         currentISO = datePicker.getSelectedISO();
-        displayMode.querySelector('.pill-date-text').textContent = currentISO ? formatShort(currentISO) : 'Pick a date';
+        showStartDate();
         closeEdit();
+        if (schedule) {
+          schedule.setSchedule({
+            startDate: currentISO,
+            deliveryDays: Array.prototype.filter.call(dayCheckboxes, function (box) { return box.checked; })
+              .map(function (box) { return box.value; })
+          });
+        }
+      });
+    }
+
+    // Follow start date changes made outside this editor (e.g. the calendar view).
+    if (schedule) {
+      schedule.subscribe(function () {
+        if (schedule.getStartDate() === currentISO) return;
+        currentISO = schedule.getStartDate();
+        showStartDate();
+        datePicker.resetTo(currentISO);
       });
     }
   }
