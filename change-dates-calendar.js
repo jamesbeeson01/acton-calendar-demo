@@ -11,7 +11,10 @@
   //           moves to the right of the grid. Clicking a date keeps it in the
   //           pane, the way Middle does, and the pane itself is a drag source:
   //           a whole date from the grid, one Section's rows on that date, or
-  //           a single row, all onto another date.
+  //           a single row, all onto another date. The legend is a fourth
+  //           grain: hover a Section to light up its dates and list its rows,
+  //           click to keep them, drag it onto a date to lay the whole Section
+  //           out from there.
   //   Middle  the same drag plus Shift later dates, Undo, and a details panel
   //           under the calendar.
   //   Full    Section ribbons, multi-date selection, week insert/remove, row
@@ -41,7 +44,7 @@
   var HINTS = {
     simple: 'Drag a date onto another date. An empty date takes its rows; a date that has rows swaps with it. Hover a date to see what is scheduled.',
     circles: 'Drag a date onto another date, the same as Simple. A filled circle is a scheduled date, coloured by its Section; a date holding more than one Section is split into a pie by row count. Hover a date to see its rows.',
-    split: 'The same grid and drag as Circles, with the details in the pane on the left and the Section legend on the right. Click a date to keep it in the pane, then drag a row, or a Section header, out of the pane onto another date.',
+    split: 'The same grid and drag as Circles, with the details in the pane on the left and the Section legend on the right. Click a date to keep it in the pane, then drag a row, or a Section header, out of the pane onto another date. Hover a Section in the legend to light up its dates and list its rows, click it to keep them, or drag it onto a date to lay the whole Section out from there on the delivery days.',
     middle: 'Drag a date onto another date to move or swap it. With Shift later dates on, that date and every date after it move together. Click a date to keep it in the panel below.',
     full: 'Click a date to select it, Shift-click for a range, Ctrl-click to add one. Drag the selection to move it, drag a row out of the panel to move just that row, or use + and − beside a week to insert or remove a week.'
   };
@@ -160,6 +163,13 @@
     '.dcal[data-variant="split"] .dcal-card{flex:1 1 420px;min-width:0}' +
     '.dcal[data-variant="split"] .dcal-panel{flex:1 1 270px;max-width:360px;min-height:236px}' +
     '.dcal-legend--side.is-right{flex-basis:168px;padding:4px 4px 4px 16px}' +
+    // Split: a legend item is a handle as well as a key, so it takes the pane
+    // handles' padding and hover fill; the negative margin keeps the gap the
+    // legend has in Circles. Kept picked while its rows are held in the pane.
+    '.dcal[data-variant="split"] .dcal-legend-item{border-radius:6px;cursor:grab;margin:-3px -4px;padding:3px 4px}' +
+    '.dcal[data-variant="split"] .dcal-legend-item:hover{background:var(--bg-subtle);color:var(--fg-1)}' +
+    '.dcal[data-variant="split"] .dcal-legend-item.is-picked{background:var(--accent-tint);box-shadow:inset 0 0 0 1px var(--accent);color:var(--fg-1)}' +
+    '.dcal[data-variant="split"] .dcal-legend-item.is-drag-source{opacity:.45}' +
     // Middle: one chip per Section on that date.
     '.dcal-chip{align-items:center;background:color-mix(in srgb,var(--dm) 16%,var(--bg-surface));border-left:3px solid var(--dm);border-radius:4px;color:var(--fg-1);display:flex;font-size:10px;font-weight:var(--weight-semibold);gap:4px;justify-content:space-between;line-height:1;overflow:hidden;padding:3px 4px;white-space:nowrap}' +
     '.dcal-chip span{color:var(--fg-2);font-weight:var(--weight-regular)}' +
@@ -193,6 +203,11 @@
     // the other prototypes have.
     '.dcal[data-variant="split"] .dcal-det-sec{border-radius:6px;cursor:grab;margin:5px 0 0;padding:3px 4px}' +
     '.dcal[data-variant="split"] .dcal-det-sec:hover{background:var(--bg-subtle)}' +
+    // Split, one Section in the pane: the date head stands in for the Section
+    // header, so it is the handle for that date's rows and looks like one.
+    '.dcal[data-variant="split"] .dcal-det-head--handle{border-radius:6px;cursor:grab;margin:0 -4px;padding:3px 4px}' +
+    '.dcal[data-variant="split"] .dcal-det-head--handle:hover{background:var(--bg-subtle)}' +
+    '.dcal-det-date--sec{align-items:center;display:inline-flex;gap:6px}' +
     '.dcal-det-row.is-locked{opacity:.5}' +
     '.dcal-det-row .cl-pill{flex:none}' +
     '.dcal-det-title{color:var(--fg-1);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
@@ -306,9 +321,11 @@
   var selection = [];       // Full: selected dates
   var selectAnchor = null;  // Full: Shift-click anchor
   var pinnedISO = null;     // Middle / Split: date kept in the panel
+  var pinnedSection = null; // Split: Section kept in the pane from the legend
   var hoverISO = null, lastHoverISO = null;
   var linkedISO = null;     // date of the Schedule row under the pointer
   var hiSection = null;     // Section under the pointer
+  var hiLegend = null;      // Split: Section under the pointer in the legend
   var weekPreview = null;   // { key, plan } for a hovered + / − button
   var press = null, drag = null, ghost = null;
   var undoStack = [], flashDates = [];
@@ -387,6 +404,16 @@
   function movableOn(iso) { return rowsOn(iso).filter(function (row) { return row.movable; }); }
   function sectionRowsOn(iso, sectionId) {
     return rowsOn(iso).filter(function (row) { return row.sectionId === sectionId; });
+  }
+  // Every date one Section has rows on, in order: the date groups the legend
+  // shows in the pane and lays out again when it is dragged.
+  function sectionDates(sectionId) {
+    return model.dates.filter(function (iso) { return sectionRowsOn(iso, sectionId).length > 0; });
+  }
+  // The Section the grid is lighting up: hovered anywhere, or kept by a click
+  // on its legend item.
+  function activeSection() {
+    return hiSection || (variant === 'split' ? pinnedSection : null);
   }
   // A date the schedule can use: a delivery day, or one that already has rows.
   function isSlot(iso) { return isDelivery(iso) || rowsOn(iso).length > 0; }
@@ -559,6 +586,36 @@
     };
   }
 
+  // Split, dragged from the legend: a whole Section laid out again from the
+  // drop date. Its first date group lands there whatever day it is, and each
+  // later group takes the next Quest Delivery Day, so the Section keeps its
+  // order and its grouping but not its old gaps.
+  function planLegend(sectionId, target) {
+    var section = sectionOf({ sectionId: sectionId });
+    var dates = sectionDates(sectionId);
+    if (!dates.length) return null;
+    if (dates.length > 1 && !deliv.length) return invalidPlan('Pick at least one Quest Delivery Day first.');
+    var moves = [], landed = [], changed = false;
+    dates.forEach(function (iso, i) {
+      var to = i === 0 ? target : shiftDelivery(target, i);
+      landed.push(to);
+      sectionRowsOn(iso, sectionId).forEach(function (row) {
+        if (!row.movable) return;
+        if (row.dueDate !== to) changed = true;
+        moves.push({ id: row.id, to: to });
+      });
+    });
+    if (!moves.length) return invalidPlan('Apply Changes To leaves every ' + section.name + ' row out.');
+    if (!changed) return null;
+    var doubled = doubledDates(moves);
+    return {
+      tag: 'Start here', moves: moves, from: dates, to: landed, select: landed, doubled: doubled,
+      sentence: 'Move ' + section.name + ' (' + rowsLabel(moves.length) + ') to start on ' + dayLabel(target) +
+        (landed.length > 1 ? ', its ' + landed.length + ' dates running on to ' +
+          shortDate(landed[landed.length - 1]) : '') + '.' + doubledNote(doubled)
+    };
+  }
+
   // ---- Applying --------------------------------------------------------------
 
   function apply(plan) {
@@ -585,7 +642,10 @@
   // ---- Details ---------------------------------------------------------------
 
   function detailsHTML(iso, opts) {
-    var rows = rowsOn(iso), out = '<div class="dcal-det">';
+    // Split shows one Section at a time in the pane; then this date lists only
+    // that Section's rows, and its head stands in for the Section header.
+    var only = (opts && opts.section) || null;
+    var rows = only ? sectionRowsOn(iso, only) : rowsOn(iso), out = '<div class="dcal-det">';
     var meta = [];
     if (iso === model.startDate) meta.push('Start Date');
     if (isDelivery(iso)) {
@@ -595,14 +655,19 @@
       meta.push('Not a delivery day');
     }
     if (rows.length) meta.push(rowsLabel(rows.length));
-    out += '<div class="dcal-det-head"><span class="dcal-det-date">' + esc(dayLabel(iso)) + '</span>' +
+    out += (only ?
+      '<div class="dcal-det-head dcal-det-head--handle" data-sec="' + esc(only) +
+        '" data-det-date="' + esc(iso) + '">' :
+      '<div class="dcal-det-head">') +
+      '<span class="dcal-det-date">' + esc(dayLabel(iso)) + '</span>' +
       '<span class="dcal-det-meta">' + esc(meta.join(' · ')) + '</span></div>';
     if (!rows.length) return out + '<p class="dcal-empty">Nothing scheduled.</p></div>';
 
     var lastSection = null;
+    if (only) out += '<ul class="dcal-det-rows">';
     rows.forEach(function (row) {
       var section = sectionOf(row);
-      if (section.id !== lastSection) {
+      if (!only && section.id !== lastSection) {
         if (lastSection !== null) out += '</ul>';
         out += '<div class="dcal-det-sec" data-sec="' + esc(section.id) + '" data-det-date="' + esc(iso) +
           '"><span class="dcal-swatch" style="--dm:' + section.color + '"></span>' +
@@ -622,6 +687,27 @@
     return out + '</div>';
   }
 
+  // Split: a whole Section in the pane, in the shape a date's details have —
+  // the Section named once at the top, then one block per date it covers.
+  function sectionDetailsHTML(sectionId, opts) {
+    var section = sectionOf({ sectionId: sectionId });
+    var dates = sectionDates(sectionId);
+    var total = dates.reduce(function (n, iso) { return n + sectionRowsOn(iso, sectionId).length; }, 0);
+    var meta = [rowsLabel(total)];
+    if (dates.length) {
+      meta.push(dates.length === 1 ? shortDate(dates[0]) :
+        shortDate(dates[0]) + ' – ' + shortDate(dates[dates.length - 1]));
+    }
+    var out = '<div class="dcal-det"><div class="dcal-det-head">' +
+      '<span class="dcal-det-date dcal-det-date--sec"><span class="dcal-swatch" style="--dm:' +
+      section.color + '"></span>' + esc(section.name) + '</span>' +
+      '<span class="dcal-det-meta">' + esc(meta.join(' · ')) + '</span></div>';
+    if (!dates.length) return out + '<p class="dcal-empty">Nothing scheduled.</p></div>';
+    if (opts && opts.hint) out += '<p class="dcal-empty" style="margin-top:6px">' + esc(opts.hint) + '</p>';
+    out += '</div>';
+    return out + dates.map(function (iso) { return detailsHTML(iso, { section: sectionId }); }).join('');
+  }
+
   // What the panel or popup shows right now.
   function detailsContent() {
     var plan = drag ? drag.plan : (weekPreview && weekPreview.plan);
@@ -630,6 +716,12 @@
       html = '<p class="dcal-plan' + (plan.invalid ? ' is-invalid' : '') + '">' + esc(plan.sentence) + '</p>';
       var focus = drag ? drag.target : null;
       return html + (focus ? detailsHTML(focus) : '');
+    }
+    // A legend item under the pointer takes the pane, the way a date does.
+    if (hiLegend) {
+      return sectionDetailsHTML(hiLegend, { hint: hiLegend === pinnedSection ?
+        'Kept here. Drag it onto a date to lay the Section out from there, or click it again to let go.' :
+        'Drag it onto a date to lay the Section out from there, or click to keep it here.' });
     }
     if (hoverISO) return detailsHTML(hoverISO);
     if (linkedISO) return detailsHTML(linkedISO);
@@ -642,6 +734,11 @@
     }
     if (variant === 'full' && selection.length === 1) {
       return detailsHTML(selection[0], { hint: 'Drag a row onto another date to move just that row.' });
+    }
+    if (pinnedSection) {
+      return sectionDetailsHTML(pinnedSection,
+        { hint: 'Drag a date or a row from here, or the legend item onto a date to move all of it. ' +
+          'Click the legend item again to let it go.' });
     }
     var restHint = variant === 'split' ?
       { hint: 'Drag a row, or a Section header, onto another date to move just those rows.' } : null;
@@ -897,21 +994,31 @@
     var willMove = plan && !plan.invalid ? plan.from : [];
     var willLand = plan && !plan.invalid ? plan.to : [];
     var doubled = plan && !plan.invalid ? plan.doubled : [];
+    // Split: the dates of the Section under the pointer, or of the one a click
+    // on the legend is keeping, take the ring a hovered Schedule row gives.
+    var secOn = activeSection();
+    var secDates = !drag && secOn && variant === 'split' ? sectionDates(secOn) : [];
 
     Array.prototype.forEach.call(mount.querySelectorAll('.dcal-d[data-date]'), function (cell) {
       var iso = cell.dataset.date;
       cell.classList.toggle('is-picked', picked.indexOf(iso) !== -1);
-      cell.classList.toggle('is-linked', !drag && iso === linkedISO);
+      cell.classList.toggle('is-linked', !drag && (iso === linkedISO || secDates.indexOf(iso) !== -1));
       cell.classList.toggle('is-drag-source', sources.indexOf(iso) !== -1);
       cell.classList.toggle('is-will-move', willMove.indexOf(iso) !== -1);
       cell.classList.toggle('is-will-land', willLand.indexOf(iso) !== -1);
       cell.classList.toggle('is-will-double', doubled.indexOf(iso) !== -1);
       cell.classList.toggle('is-drop-target', !!drag && iso === drag.target);
       cell.classList.toggle('is-drop-invalid', !!drag && iso === drag.target && !!plan && !!plan.invalid);
-      cell.classList.toggle('is-sec-dim', !!hiSection && !drag && rowsOn(iso).length > 0 &&
-        !sectionRowsOn(iso, hiSection).length);
+      cell.classList.toggle('is-sec-dim', !!secOn && !drag && rowsOn(iso).length > 0 &&
+        !sectionRowsOn(iso, secOn).length);
       if (drag && iso === drag.target && plan) cell.dataset.dropTag = plan.tag;
       else delete cell.dataset.dropTag;
+    });
+
+    Array.prototype.forEach.call(mount.querySelectorAll('.dcal-legend-item[data-sec]'), function (item) {
+      var id = item.dataset.sec;
+      item.classList.toggle('is-picked', variant === 'split' && id === pinnedSection);
+      item.classList.toggle('is-drag-source', !!drag && drag.kind === 'legend' && drag.secId === id);
     });
 
     var panel = mount.querySelector('[data-dcal-panel]');
@@ -964,6 +1071,10 @@
     var iso = cell && mount.contains(cell) ? cell.dataset.date : null;
     var secEl = elementAt(e.target, '[data-sec]');
     var sec = secEl && mount.contains(secEl) ? secEl.dataset.sec : null;
+    // Only the legend swaps the pane over to a whole Section: a Section header
+    // inside the pane would pull the pane out from under the pointer.
+    var legEl = canDragSection() ? elementAt(e.target, '.dcal-legend-item[data-sec]') : null;
+    var leg = legEl && mount.contains(legEl) ? legEl.dataset.sec : null;
     var actEl = elementAt(e.target, '[data-week-act]');
     var actKey = actEl && mount.contains(actEl) ? actEl.dataset.weekAct + actEl.dataset.week : null;
 
@@ -976,11 +1087,12 @@
       linked = row ? row.dueDate : null;
     }
 
-    var changed = iso !== hoverISO || sec !== hiSection || linked !== linkedISO ||
+    var changed = iso !== hoverISO || sec !== hiSection || leg !== hiLegend || linked !== linkedISO ||
       actKey !== (weekPreview && weekPreview.key);
     hoverISO = iso;
     if (iso) lastHoverISO = iso;
     hiSection = sec;
+    hiLegend = leg;
     linkedISO = linked;
     weekPreview = actEl && mount.contains(actEl) ?
       { key: actKey, plan: planWeek(actEl.dataset.week, actEl.dataset.weekAct === 'insert' ? 1 : -1) } : null;
@@ -997,6 +1109,10 @@
       return sectionOf({ sectionId: drag.secId }).name + ' · ' +
         rowsLabel(sectionRowsOn(drag.secDate, drag.secId).length);
     }
+    if (drag.kind === 'legend') {
+      var all = drag.sources.reduce(function (n, iso) { return n + sectionRowsOn(iso, drag.secId).length; }, 0);
+      return sectionOf({ sectionId: drag.secId }).name + ' · ' + rowsLabel(all);
+    }
     var rows = drag.sources.reduce(function (n, iso) { return n + movableOn(iso).length; }, 0);
     var base = drag.sources.length === 1 ? shortDate(drag.sources[0]) + ' · ' + rowsLabel(rows) :
       drag.sources.length + ' dates · ' + rowsLabel(rows);
@@ -1007,6 +1123,7 @@
     if (!target) return null;
     if (drag.kind === 'row') return planRow(drag.rowId, target);
     if (drag.kind === 'section') return planSection(drag.secDate, drag.secId, target);
+    if (drag.kind === 'legend') return planLegend(drag.secId, target);
     if (shiftOn()) return planShift(drag.sources[0], drag.anchor, target);
     return planDates(drag.sources, drag.anchor, target);
   }
@@ -1016,6 +1133,11 @@
       var row = model.rowById[press.rowId];
       if (!canDragRow() || !row) return false;
       drag = { kind: 'row', rowId: press.rowId, sources: [row.dueDate], anchor: row.dueDate, target: null, plan: null };
+    } else if (press.legendSec) {
+      var secDrag = canDragSection() ? sectionDates(press.legendSec) : [];
+      if (!secDrag.length) return false;
+      drag = { kind: 'legend', secId: press.legendSec, sources: secDrag, anchor: secDrag[0],
+        target: null, plan: null };
     } else if (press.secId) {
       if (!canDragSection() || !sectionRowsOn(press.secDate, press.secId).length) return false;
       drag = { kind: 'section', secId: press.secId, secDate: press.secDate, sources: [press.secDate],
@@ -1052,14 +1174,17 @@
     if (e.button !== 0) return;
     if (elementAt(e.target, 'button')) return;
     var rowEl = elementAt(e.target, '.dcal-det-row[data-row-id]');
-    var secEl = elementAt(e.target, '.dcal-det-sec[data-det-date]');
+    // A Section header, or the date head that stands in for one in Split.
+    var secEl = elementAt(e.target, '[data-det-date][data-sec]');
+    var legEl = canDragSection() ? elementAt(e.target, '.dcal-legend-item[data-sec]') : null;
     var cell = elementAt(e.target, '.dcal-d[data-date]');
-    if (!rowEl && !secEl && !cell) return;
+    if (!rowEl && !secEl && !legEl && !cell) return;
     press = {
       x: e.clientX, y: e.clientY, blocked: false,
       rowId: rowEl ? rowEl.dataset.rowId : null,
       secId: secEl ? secEl.dataset.sec : null,
       secDate: secEl ? secEl.dataset.detDate : null,
+      legendSec: legEl ? legEl.dataset.sec : null,
       iso: cell ? cell.dataset.date : null,
       range: e.shiftKey, toggle: e.ctrlKey || e.metaKey
     };
@@ -1103,7 +1228,8 @@
         decorate();
       }
     } else if (press && !press.blocked) {
-      if (press.rowId) scrollToRow(press.rowId);
+      if (press.legendSec) clickSection(press.legendSec);
+      else if (press.rowId) scrollToRow(press.rowId);
       else if (press.secId) {
         var first = sectionRowsOn(press.secDate, press.secId)[0];
         if (first) scrollToRow(first.id);
@@ -1137,7 +1263,17 @@
       }
     } else if (hasPin()) {
       pinnedISO = pinnedISO === p.iso ? null : p.iso;
+      // The pane keeps one thing at a time: a date or a Section, not both.
+      if (pinnedISO) pinnedSection = null;
     }
+    decorate();
+  }
+
+  // Split: a click on a legend item keeps that Section's rows in the pane and
+  // its dates lit until the same item is clicked again.
+  function clickSection(sectionId) {
+    pinnedSection = pinnedSection === sectionId ? null : sectionId;
+    if (pinnedSection) pinnedISO = null;
     decorate();
   }
 
@@ -1160,7 +1296,9 @@
       selection = [];
       selectAnchor = null;
       pinnedISO = null;
+      pinnedSection = null;
       hiSection = null;
+      hiLegend = null;
       render();
       return;
     }
@@ -1187,6 +1325,7 @@
       undoStack = [];
       selection = [];
       pinnedISO = null;
+      pinnedSection = null;
     }
     render();
   });
