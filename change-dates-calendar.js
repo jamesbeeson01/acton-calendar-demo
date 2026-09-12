@@ -974,7 +974,10 @@
       '</div>' +
       '<div class="input-explanation dcal-hint">' + esc(HINTS[variant]) + '</div>' +
       toolsHTML() +
-      '<div class="dcal-body">' + (variant === 'split' ? panelHTML + cardHTML : cardHTML + panelHTML) + '</div>';
+      '<div class="dcal-body">' + (variant === 'split' ? panelHTML + cardHTML : cardHTML + panelHTML) + '</div>' +
+      // This Block is rebuilt on every change, so its Save and Cancel are
+      // drawn here rather than appended once like the other Blocks'.
+      (window.JourneyBlockActions ? window.JourneyBlockActions.footerHTML('calendar') : '');
 
     if (flashDates.length) {
       flashDates.forEach(function (iso) {

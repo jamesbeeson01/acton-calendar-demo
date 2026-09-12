@@ -20,7 +20,10 @@ Shared names for UI elements in this prototype.
 
 | Term | What it is | Code hook |
 |---|---|---|
-| **Block** | Change Dates: a rounded, bordered box holding a group of controls. The first Block (grey) holds Start Date, Quest Delivery Days, Apply Changes To and Day Mappings. Each Time group below it (white) is also a Block, holding Before time, After time and Preview challenges. On Badge Overview the lookalike box is a Section, not a Block. | `#bulk-time-change-body .rounded-xl.border-border-1` |
+| **Block** | Change Dates: a rounded, bordered box holding a group of controls. The first Block (grey) holds Start Date, Quest Delivery Days, Apply Changes To and Day Mappings. Each Time group below it (white) is also a Block, holding Before time, After time and Preview challenges. On Badge Overview the lookalike box is a Section, not a Block. The Reset to Defaults block is not one: it has no Block actions. | `#bulk-time-change-body .rounded-xl.border-border-1` |
+| **Block actions** | Change Dates: the Block Cancel and Block Save pair at the bottom of every Block, above a top border, with the Block note to their left. Both are greyed out while the Block is unchanged. | `.block-actions`, `[data-block-actions]` (its value is the Block's kind: `settings`, `calendar` or `time`) |
+| **Block Cancel** / **Block Save** | Puts the Block back to how it was when the page loaded or the Block was last saved / takes that mark again. Neither submits anything: the page's own Save at the bottom still does that. A Block owns its own form fields plus one slice of the Schedule store — the first Block the Start Date and Quest Delivery Days, the calendar every row's date, a Time group its own rows' times. Always use the full name so they aren't confused with the form's Save and Cancel at the bottom of the page. | `[data-block-action="cancel"]` / `[data-block-action="save"]` |
+| **Block note** | Line at the left of the Block actions: "Not saved yet" while the Block is changed, then a green "Saved" line for four seconds after Block Save. | `[data-block-note]` |
 
 ## Schedule rows
 
@@ -75,6 +78,14 @@ Shared names for UI elements in this prototype.
 |---|---|---|
 | **Change Dates calendar** / **Date Change Calendar** | Either name for the same thing: its own Block on Change Dates, between the first Block and the Time groups. One grid of weeks covering the whole schedule, where a date is dragged onto another date to move or swap the rows on it. Five prototype versions (Simple, Circles, Split, Middle, Full) sit behind the toggle in its header so they can be compared. Every edit goes through the Schedule store, so the Time groups below it are the preview. | `#dates-calendar`, `.dcal`; current version in `data-variant` |
 
+## Reset to Defaults (Change Dates only, `change-dates-blocks.js`)
+
+| Term | What it is | Code hook |
+|---|---|---|
+| **Reset to Defaults block** | Red box under the last Time group and above the form's Save, holding the Reset to Defaults button. Not a Block: it has no Block actions. | `#reset-defaults-block`, `.reset-block` |
+| **Reset to Defaults button** | Red button that opens the Reset confirm. On confirm it drops every change and applies the Default schedule, which unschedules Week 6 and BONUS. Not the calendar's **Reset dates** button, which only restores the dates the page loaded with. | `[data-reset-defaults]` |
+| **Reset confirm** | "Reset to Defaults?" dialog, built from the page's own confirm template. Says what is dropped and that the form's Save at the bottom is still needed. Closes on its Cancel, its X, the backdrop or Escape. | `.block-confirm`, cloned from `#jt-global-confirm-template` |
+
 ## Change Dates prefill (Change Dates only, `change-dates-page.js`)
 
 | Term | What it is | Code hook |
@@ -87,9 +98,11 @@ Shared names for UI elements in this prototype.
 |---|---|---|
 | **Schedule store** | Source of truth for every date and day on a page. Seeded from the page's markup on load; changes rewrite only text, data attributes and checkbox state, and are kept in localStorage so both pages agree. `reset()` restores the markup's dates. | `window.JourneySchedule` |
 | **Row record** | Store entry for one Schedule row: `id`, `type` (`challenge` / `launch` / `close`), `title`, `sectionId`, `position`, `dueDate` (`YYYY-MM-DD`), `dueTime` (`HH:MM`), `utcOffset`, `scheduledDay` | `getRow(id)`, `getRows()`, `getRowsInSection(sectionId)`, `getSectionOfRow(id)` |
+| **Unscheduled row** | A Row record with a null `dueDate`, so null `dueTime` and `scheduledDay` too. Its Date pill and Day pill are hidden, and on Change Dates so is its Preview item, along with any Time group left with none — the only thing the store renders as style rather than text. | `updateRow(id, { dueDate: null })` |
+| **Default schedule** | The schedule the badge is meant to start from: the markup's own start date, delivery days and dates, with every row in Week 6 and BONUS unscheduled. Built from the seed, so a change never moves it. | `getDefaultSchedule()`, `getDefaultRow(id)`; `UNSCHEDULED_SECTIONS` in `schedule-store.js` |
 | **Scheduled day** | The number in a Day pill: delivery days counted from the Start Date, which is Day 1. There is no Day 0. | `scheduledDayFor(iso)`, `dateForScheduledDay(n)`; `dateForScheduledDay(n, { startDate, deliveryDays })` counts with unsaved choices instead |
 
-Changing data: `updateRow(id, { dueDate, dueTime, scheduledDay })` (a new `dueDate` recalculates `scheduledDay` unless one is passed) and `setSchedule({ startDate, deliveryDays })` (every dated row keeps its Day number and time and moves to that day's new date; rows never re-order). `subscribe(fn)` is called after every change.
+Changing data: `updateRow(id, { dueDate, dueTime, scheduledDay })` (a new `dueDate` recalculates `scheduledDay` unless one is passed; a null one unschedules the row) and `setSchedule({ startDate, deliveryDays })` (every dated row keeps its Day number and time and moves to that day's new date; rows never re-order). `subscribe(fn)` is called after every change. `reset()` restores the markup's dates; `resetToDefaults()` applies the Default schedule instead, and unlike `reset()` is stored like any other change.
 
 What the store writes on each change:
 

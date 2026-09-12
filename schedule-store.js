@@ -26,6 +26,10 @@
     { id: '571803', name: 'BONUS Launches & Core Systems' }
   ];
 
+  // The badge ships with these two Sections unscheduled, so the defaults the
+  // Reset to defaults block restores leave every row in them without a date.
+  var UNSCHEDULED_SECTIONS = ['571802', '571803'];
+
   function pad2(n) { return String(n).padStart(2, '0'); }
   function parseISO(iso) { var p = iso.split('-').map(Number); return new Date(Date.UTC(p[0], p[1] - 1, p[2])); }
   function toISO(d) { return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate()); }
@@ -129,6 +133,23 @@
     rowOrder.forEach(function (id) { state.rows[id] = Object.assign({}, seed.rows[id], stored.rows[id]); });
   }
 
+  // The intended original schedule: the markup's own start date, delivery days
+  // and dates, minus the Sections the badge ships unscheduled. It is built
+  // from the seed, not the stored state, so it never moves with a change.
+  var defaults;
+
+  function buildDefaults() {
+    defaults = { startDate: seed.startDate, deliveryDays: seed.deliveryDays.slice(), rows: {} };
+    rowOrder.forEach(function (id) {
+      var row = seed.rows[id], off = UNSCHEDULED_SECTIONS.indexOf(row.sectionId) !== -1;
+      defaults.rows[id] = {
+        dueDate: off ? null : row.dueDate,
+        dueTime: off ? null : row.dueTime,
+        scheduledDay: off ? null : row.scheduledDay
+      };
+    });
+  }
+
   function save() {
     rowOrder.forEach(function (id) {
       var row = state.rows[id], base = seed.rows[id];
@@ -146,16 +167,25 @@
 
   function setAttr(el, name, value) { if (el.getAttribute(name) !== value) el.setAttribute(name, value); }
   function setText(el, value) { if (el && el.textContent !== value) el.textContent = value; }
+  // The one thing rendered as style rather than text: an unscheduled row shows
+  // no Date or Day pill, and no Preview item, the way Change Dates leaves out
+  // the rows that never had a date.
+  function showEl(el, on) { if (el && el.style.display !== (on ? '' : 'none')) el.style.display = on ? '' : 'none'; }
+  function isShown(el) { return el.style.display !== 'none'; }
 
   function renderRow(id) {
     var row = state.rows[id], b = bindings[id];
-    if (!row.dueDate) return; // undated rows have no Date or Day pill to fill
     b.articles.forEach(function (article) {
+      showEl(article.querySelector('[data-pill="date"]'), !!row.dueDate);
+      showEl(article.querySelector('[data-pill="scheduled-day"]'), !!row.dueDate && row.scheduledDay !== null);
+      if (!row.dueDate) { setAttr(article, 'data-due-date', ''); return; }
       setAttr(article, 'data-due-date', formatDueDateAttr(row));
       setText(pillTextEl(article, 'date'), formatDatePill(row.dueDate, row.dueTime));
       if (row.scheduledDay !== null) setText(pillTextEl(article, 'scheduled-day'), formatDayPill(row.scheduledDay));
     });
     b.items.forEach(function (item) {
+      showEl(item, !!row.dueDate);
+      if (!row.dueDate) return;
       if (row.scheduledDay !== null) setAttr(item, 'data-scheduled-day', String(row.scheduledDay));
       setAttr(item, 'data-original-time', row.dueTime);
       setAttr(item, 'data-original-due-date', formatDueDateTimeISO(row));
@@ -168,8 +198,11 @@
   // alone: moving rows between time groups would be a structure change.
   function renderTimeGroups() {
     document.querySelectorAll('[data-target="bulk-time-change.timeGroup"]').forEach(function (group) {
-      var first = group.querySelector('[data-bulk-time-change-target="challengeItem"]');
-      if (first) setAttr(group, 'data-scheduled-day', first.getAttribute('data-scheduled-day'));
+      var shown = Array.prototype.filter.call(
+        group.querySelectorAll('[data-bulk-time-change-target="challengeItem"]'), isShown);
+      // A Time group whose rows are all unscheduled has nothing left to preview.
+      showEl(group, shown.length > 0);
+      if (shown.length) setAttr(group, 'data-scheduled-day', shown[0].getAttribute('data-scheduled-day'));
     });
   }
 
@@ -245,21 +278,24 @@
 
   function checkRowChanges(id, changes) {
     if (!state.rows[id]) throw new Error('Unknown schedule row: ' + id);
-    if ('dueDate' in changes && !ISO_DATE.test(changes.dueDate)) throw new Error('dueDate must be YYYY-MM-DD');
-    if ('dueTime' in changes && !TIME.test(changes.dueTime)) throw new Error('dueTime must be HH:MM');
+    if ('dueDate' in changes && changes.dueDate !== null && !ISO_DATE.test(changes.dueDate)) throw new Error('dueDate must be YYYY-MM-DD or null');
+    if ('dueTime' in changes && changes.dueTime !== null && !TIME.test(changes.dueTime)) throw new Error('dueTime must be HH:MM or null');
   }
 
   function applyRowChanges(id, changes) {
     var row = state.rows[id];
     if ('dueDate' in changes) row.dueDate = changes.dueDate;
     if ('dueTime' in changes) row.dueTime = changes.dueTime;
-    if (row.dueDate && !row.dueTime) row.dueTime = '00:00';
+    // A null dueDate unschedules the row, so it keeps no time or day either.
+    if (!row.dueDate) { row.dueDate = null; row.dueTime = null; row.scheduledDay = null; return; }
+    if (!row.dueTime) row.dueTime = '00:00';
     if ('scheduledDay' in changes) row.scheduledDay = changes.scheduledDay;
     else if ('dueDate' in changes) row.scheduledDay = scheduledDayFor(row.dueDate);
   }
 
-  // changes: { dueDate: 'YYYY-MM-DD', dueTime: 'HH:MM', scheduledDay: n }, all optional.
-  // A new dueDate recalculates scheduledDay unless one is passed too.
+  // changes: { dueDate: 'YYYY-MM-DD' | null, dueTime: 'HH:MM' | null, scheduledDay: n },
+  // all optional. A new dueDate recalculates scheduledDay unless one is passed
+  // too; a null dueDate unschedules the row.
   function updateRow(id, changes) {
     checkRowChanges(id, changes);
     applyRowChanges(id, changes);
@@ -306,9 +342,22 @@
     commit({ type: 'reset' });
   }
 
+  // Drops every stored change and puts the page back to the intended original
+  // schedule, which leaves Week 6 and BONUS unscheduled. Unlike reset() that
+  // is a change like any other, so it is stored and the Time groups show it.
+  function resetToDefaults() {
+    stored = { rows: {} };
+    buildState();
+    state.startDate = defaults.startDate;
+    state.deliveryDays = defaults.deliveryDays.slice();
+    rowOrder.forEach(function (id) { Object.assign(state.rows[id], defaults.rows[id]); });
+    commit({ type: 'defaults' });
+  }
+
   function byPosition(a, b) { return a.position - b.position; }
 
   readPage();
+  buildDefaults();
   loadStored();
   buildState();
   render();
@@ -326,6 +375,12 @@
     getRow: function (id) { return copy(state.rows[id]); },
     // The row as the page's markup has it, before any stored change.
     getOriginalRow: function (id) { return copy(seed.rows[id]); },
+    // The row in the intended original schedule: no dates at all in the
+    // Sections the badge ships unscheduled.
+    getDefaultRow: function (id) { return copy(defaults.rows[id]); },
+    getDefaultSchedule: function () {
+      return { startDate: defaults.startDate, deliveryDays: defaults.deliveryDays.slice() };
+    },
     // Rows present on this page, in their order within the section.
     getRowsInSection: function (sectionId) {
       return rowOrder.map(function (id) { return state.rows[id]; })
@@ -341,13 +396,15 @@
     updateRows: updateRows,
     scheduledDayFor: scheduledDayFor,
     dateForScheduledDay: dateForScheduledDay,
-    // fn({ type: 'row' | 'rows' | 'schedule' | 'reset', rowId, rowIds }); returns
-    // an unsubscribe function.
+    // fn({ type: 'row' | 'rows' | 'schedule' | 'reset' | 'defaults', rowId,
+    // rowIds }); returns an unsubscribe function.
     subscribe: function (fn) {
       listeners.push(fn);
       return function () { listeners = listeners.filter(function (l) { return l !== fn; }); };
     },
     // Drops all stored changes and restores the dates in the markup.
-    reset: reset
+    reset: reset,
+    // Restores the intended original schedule instead of the markup's dates.
+    resetToDefaults: resetToDefaults
   };
 })();
