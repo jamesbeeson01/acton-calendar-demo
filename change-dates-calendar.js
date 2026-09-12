@@ -1,11 +1,15 @@
 (function () {
-  // Four prototypes of the Change Dates calendar in one Block, switched by the
+  // Five prototypes of the Change Dates calendar in one Block, switched by the
   // Version toggle, so they can be compared by feel:
   //
   //   Simple  drag one date onto another; hover popup; no options.
   //   Circles Simple with the Overview calendar's shape: equal columns, the
   //           Section legend down the left, and a filled circle per scheduled
   //           date, drawn as a pie when a date holds more than one Section.
+  //   Split   Circles rearranged: the details Circles shows in a hover popup
+  //           sit in a pane down the left instead, and the Section legend
+  //           moves to the right of the grid. Clicking a date keeps it in the
+  //           pane, the way Middle does.
   //   Middle  the same drag plus Shift later dates, Undo, and a details panel
   //           under the calendar.
   //   Full    Section ribbons, multi-date selection, week insert/remove, row
@@ -28,12 +32,14 @@
   var VARIANTS = [
     { id: 'simple', label: 'Simple' },
     { id: 'circles', label: 'Circles' },
+    { id: 'split', label: 'Split' },
     { id: 'middle', label: 'Middle' },
     { id: 'full', label: 'Full' }
   ];
   var HINTS = {
     simple: 'Drag a date onto another date. An empty date takes its rows; a date that has rows swaps with it. Hover a date to see what is scheduled.',
     circles: 'Drag a date onto another date, the same as Simple. A filled circle is a scheduled date, coloured by its Section; a date holding more than one Section is split into a pie by row count. Hover a date to see its rows.',
+    split: 'The same grid and drag as Circles, with the Section legend beside it and the details in the pane on the left, so hovering a date never covers the calendar. Click a date to keep it in the pane; click it again to let go.',
     middle: 'Drag a date onto another date to move or swap it. With Shift later dates on, that date and every date after it move together. Click a date to keep it in the panel below.',
     full: 'Click a date to select it, Shift-click for a range, Ctrl-click to add one. Drag the selection to move it, drag a row out of the panel to move just that row, or use + and − beside a week to insert or remove a week.'
   };
@@ -112,9 +118,9 @@
     // Capped rather than fit-content: shrink-to-fit collapsed the card so far
     // that the legend wrapped above the grid instead of sitting beside it.
     '.dcal-card--circles{display:flex;flex-wrap:wrap;gap:18px;max-width:780px}' +
-    '.dcal[data-variant="circles"] .dcal-card{padding:10px 12px}' +
-    '.dcal[data-variant="circles"] .dcal-week{border-top:0}' +
-    '.dcal[data-variant="circles"] .dcal-d.is-alt-month{background:none}' +
+    '.dcal[data-variant="circles"] .dcal-card,.dcal[data-variant="split"] .dcal-card{padding:10px 12px}' +
+    '.dcal[data-variant="circles"] .dcal-week,.dcal[data-variant="split"] .dcal-week{border-top:0}' +
+    '.dcal[data-variant="circles"] .dcal-d.is-alt-month,.dcal[data-variant="split"] .dcal-d.is-alt-month{background:none}' +
     '.dcal-grid-wrap{flex:1 1 320px;max-width:520px;min-width:0}' +
     '.dcal-legend--side{align-content:flex-start;flex:0 0 196px;flex-direction:column;gap:9px;margin-top:6px;padding:4px 16px 4px 4px}' +
     '.dcal-d--circle{align-items:center;justify-content:center;min-height:46px}' +
@@ -129,6 +135,12 @@
     '.dcal-d--circle.has-rows:hover{box-shadow:none}' +
     '.dcal-d--circle.has-rows:hover .dcal-circle{box-shadow:var(--shadow-md);transform:scale(1.3);z-index:1}' +
     '.dcal-d--circle.is-drag-source{opacity:.45;outline:0}' +
+    '.dcal-d--circle.is-picked{background-color:transparent;box-shadow:none}' +
+    '.dcal-d--circle.is-picked .dcal-circle{box-shadow:0 0 0 2px var(--bg-surface),0 0 0 5px var(--accent),var(--shadow-md);transform:scale(1.15)}' +
+    // Split: hovering a Schedule row below rings its date's circle, since a
+    // rectangle would look out of place here.
+    '.dcal-d--circle.is-linked{box-shadow:none}' +
+    '.dcal-d--circle.is-linked .dcal-circle{box-shadow:0 0 0 2px var(--bg-surface),0 0 0 4px var(--accent)}' +
     '.dcal-d--circle.is-will-land,.dcal-d--circle.is-will-double,.dcal-d--circle.is-drop-target,.dcal-d--circle.is-drop-invalid{background-color:transparent;box-shadow:none}' +
     '.dcal-d--circle.is-will-land .dcal-circle{box-shadow:0 0 0 2px var(--bg-surface),0 0 0 4px var(--accent)}' +
     '.dcal-d--circle.is-will-double .dcal-circle{box-shadow:0 0 0 2px var(--bg-surface),0 0 0 4px var(--st-late)}' +
@@ -137,6 +149,15 @@
     '.dcal-d--circle.is-flash{animation:none}' +
     '.dcal-d--circle.is-flash .dcal-circle{animation:dcal-flash-ring 1.1s ease-out}' +
     '@keyframes dcal-flash-ring{0%{box-shadow:0 0 0 2px var(--bg-surface),0 0 0 5px var(--accent)}100%{box-shadow:none}}' +
+    // Split: the Circles grid between a details pane on the left and the
+    // legend on the right. The pane stretches to the calendar's height, so it
+    // reads as the other half of one box and nothing moves as the details
+    // change from date to date. The min-height only matters once the pane
+    // wraps below the calendar and has no card beside it to match.
+    '.dcal[data-variant="split"] .dcal-body{align-items:stretch;flex-direction:row;flex-wrap:wrap}' +
+    '.dcal[data-variant="split"] .dcal-card{flex:1 1 420px;min-width:0}' +
+    '.dcal[data-variant="split"] .dcal-panel{flex:1 1 270px;max-width:360px;min-height:236px}' +
+    '.dcal-legend--side.is-right{flex-basis:168px;padding:4px 4px 4px 16px}' +
     // Middle: one chip per Section on that date.
     '.dcal-chip{align-items:center;background:color-mix(in srgb,var(--dm) 16%,var(--bg-surface));border-left:3px solid var(--dm);border-radius:4px;color:var(--fg-1);display:flex;font-size:10px;font-weight:var(--weight-semibold);gap:4px;justify-content:space-between;line-height:1;overflow:hidden;padding:3px 4px;white-space:nowrap}' +
     '.dcal-chip span{color:var(--fg-2);font-weight:var(--weight-regular)}' +
@@ -270,14 +291,14 @@
   var variant = 'simple';
   try {
     var saved = localStorage.getItem(VARIANT_KEY);
-    if (saved === 'circles' || saved === 'middle' || saved === 'full') variant = saved;
+    if (saved === 'circles' || saved === 'split' || saved === 'middle' || saved === 'full') variant = saved;
   } catch (e) {}
 
   var shiftLater = false;   // Middle / Full: drag moves every later date too
   var showEarlier = false;  // include rows before the Start Date's week
   var selection = [];       // Full: selected dates
   var selectAnchor = null;  // Full: Shift-click anchor
-  var pinnedISO = null;     // Middle: date kept in the panel
+  var pinnedISO = null;     // Middle / Split: date kept in the panel
   var hoverISO = null, lastHoverISO = null;
   var linkedISO = null;     // date of the Schedule row under the pointer
   var hiSection = null;     // Section under the pointer
@@ -286,8 +307,15 @@
   var undoStack = [], flashDates = [];
   var model = null;
 
-  function hasPanel() { return variant === 'middle' || variant === 'full'; }
-  function shiftOn() { return hasPanel() && shiftLater; }
+  // Circles and Split draw the same grid of circles; Split also keeps a pane.
+  function isCircles() { return variant === 'circles' || variant === 'split'; }
+  function hasPanel() { return variant === 'middle' || variant === 'full' || variant === 'split'; }
+  // Shift later dates, Undo and the rest of the tool row stay with the two
+  // later prototypes: Split is Circles, only laid out differently.
+  function hasTools() { return variant === 'middle' || variant === 'full'; }
+  // Clicking a date keeps it in the panel in these two.
+  function hasPin() { return variant === 'middle' || variant === 'split'; }
+  function shiftOn() { return hasTools() && shiftLater; }
 
   // ---- Model -----------------------------------------------------------------
 
@@ -586,10 +614,11 @@
     if (variant === 'full' && selection.length === 1) {
       return detailsHTML(selection[0], { hint: 'Drag a row onto another date to move just that row.' });
     }
-    if (variant === 'middle' && pinnedISO) return detailsHTML(pinnedISO);
+    if (hasPin() && pinnedISO) return detailsHTML(pinnedISO);
     if (lastHoverISO) return detailsHTML(lastHoverISO);
     return '<p class="dcal-empty">Hover a date to see what is scheduled on it' +
-      (variant === 'full' ? ', or click one to select it.' : '.') + '</p>';
+      (variant === 'full' ? ', or click one to select it.' :
+        variant === 'split' ? ', or click one to keep it here.' : '.') + '</p>';
   }
 
   // ---- Rendering -------------------------------------------------------------
@@ -692,11 +721,11 @@
       var classes = 'dcal-d';
       if (monthIndex(iso) % 2 !== monthIndex(model.anchor) % 2) classes += ' is-alt-month';
       if (!isDelivery(iso)) classes += ' is-off';
-      if (variant !== 'circles' && !model.wide[weekdayIndex(iso)]) classes += ' is-narrow';
+      if (!isCircles() && !model.wide[weekdayIndex(iso)]) classes += ' is-narrow';
       if (rows.length) classes += ' has-rows';
       if (iso === model.startDate) classes += ' is-start';
       if (iso > model.inRangeEnd) classes += ' is-out';
-      if (variant === 'circles') {
+      if (isCircles()) {
         cells += '<div class="' + classes + ' dcal-d--circle" data-date="' + iso + '">' +
           circleHTML(iso, rows) + '</div>';
         continue;
@@ -731,8 +760,9 @@
 
   function gridHTML() {
     var cols = (variant === 'full' ? '44px' : '32px');
-    // Circles gives every weekday the same width, like the Overview calendar.
-    var equal = variant === 'circles';
+    // Circles and Split give every weekday the same width, like the Overview
+    // calendar.
+    var equal = isCircles();
     for (var i = 0; i < 7; i++) cols += equal || model.wide[i] ? ' minmax(0,1fr)' : ' 26px';
     var head = '<div class="dcal-dh"><span></span>';
     for (var j = 0; j < 7; j++) head += '<span>' + (equal || model.wide[j] ? DAY_SHORT[j] : DAY_SHORT[j].charAt(0)) + '</span>';
@@ -756,7 +786,8 @@
     });
     shown.sort(function (a, b) { return sectionOf({ sectionId: a }).order - sectionOf({ sectionId: b }).order; });
     if (!shown.length) return '';
-    return '<div class="dcal-legend' + (variant === 'circles' ? ' dcal-legend--side' : '') + '">' + shown.map(function (id) {
+    var side = isCircles() ? ' dcal-legend--side' + (variant === 'split' ? ' is-right' : '') : '';
+    return '<div class="dcal-legend' + side + '">' + shown.map(function (id) {
       var section = sectionOf({ sectionId: id });
       return '<span class="dcal-legend-item" data-sec="' + esc(id) + '">' +
         '<span class="dcal-swatch" style="--dm:' + section.color + '"></span>' + esc(section.name) + '</span>';
@@ -764,7 +795,7 @@
   }
 
   function toolsHTML() {
-    if (!hasPanel()) return '';
+    if (!hasTools()) return '';
     var types = movableTypes();
     var limited = variant === 'full' && !(types.launch && types.challenge && types.close);
     return '<div class="dcal-tools">' +
@@ -787,6 +818,16 @@
       ' before ' + shortDate(model.firstWeek) + '</button>' :
       (showEarlier ? '<button type="button" class="dcal-earlier" data-dcal-earlier>▾ Hide earlier weeks</button>' : '');
 
+    // Circles keeps the legend left of the grid; Split moves it to the right,
+    // because the details pane takes the left of the row.
+    var gridWrap = '<div class="dcal-grid-wrap">' + earlier + gridHTML() + '</div>';
+    var cardHTML = '<div class="dcal-card' + (isCircles() ? ' dcal-card--circles' : '') + '">' +
+      (isCircles()
+        ? (variant === 'split' ? gridWrap + legendHTML() : legendHTML() + gridWrap)
+        : earlier + gridHTML() + legendHTML()) +
+      '</div>';
+    var panelHTML = hasPanel() ? '<div class="dcal-panel" data-dcal-panel></div>' : '';
+
     mount.className = 'dcal border border-border-1 rounded-xl bg-bg-subtle mb-4 p-4';
     mount.dataset.variant = variant;
     mount.innerHTML =
@@ -804,14 +845,7 @@
       '</div>' +
       '<div class="input-explanation dcal-hint">' + esc(HINTS[variant]) + '</div>' +
       toolsHTML() +
-      '<div class="dcal-body">' +
-      '<div class="dcal-card' + (variant === 'circles' ? ' dcal-card--circles' : '') + '">' +
-      (variant === 'circles'
-        ? legendHTML() + '<div class="dcal-grid-wrap">' + earlier + gridHTML() + '</div>'
-        : earlier + gridHTML() + legendHTML()) +
-      '</div>' +
-      (hasPanel() ? '<div class="dcal-panel" data-dcal-panel></div>' : '') +
-      '</div>';
+      '<div class="dcal-body">' + (variant === 'split' ? panelHTML + cardHTML : cardHTML + panelHTML) + '</div>';
 
     if (flashDates.length) {
       flashDates.forEach(function (iso) {
@@ -828,7 +862,7 @@
   function decorate() {
     var plan = drag ? drag.plan : (weekPreview && weekPreview.plan);
     var sources = drag ? drag.sources : [];
-    var picked = variant === 'full' ? selection : (variant === 'middle' && pinnedISO ? [pinnedISO] : []);
+    var picked = variant === 'full' ? selection : (hasPin() && pinnedISO ? [pinnedISO] : []);
     var willMove = plan && !plan.invalid ? plan.from : [];
     var willLand = plan && !plan.invalid ? plan.to : [];
     var doubled = plan && !plan.invalid ? plan.doubled : [];
@@ -1055,7 +1089,7 @@
         selection = selection.length === 1 && selection[0] === p.iso ? [] : [p.iso];
         selectAnchor = p.iso;
       }
-    } else if (variant === 'middle') {
+    } else if (hasPin()) {
       pinnedISO = pinnedISO === p.iso ? null : p.iso;
     }
     decorate();
