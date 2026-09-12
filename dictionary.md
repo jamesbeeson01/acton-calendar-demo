@@ -69,6 +69,12 @@ Shared names for UI elements in this prototype.
 | **Row dot** | One row's dot: launch purple, challenge blue, close grey | `.overview-cal-dot--launch` / `--challenge` / `--close` |
 | **Type legend** | Key under the calendar in Rows view, listing only the types shown | `[data-overview-cal-target="legend"]` |
 
+## Change Dates calendar (Change Dates only, `change-dates-calendar.js`)
+
+| Term | What it is | Code hook |
+|---|---|---|
+| **Change Dates calendar** / **Date Change Calendar** | Either name for the same thing: its own Block on Change Dates, between the first Block and the Time groups. One grid of weeks covering the whole schedule, where a date is dragged onto another date to move or swap the rows on it. Five prototype versions (Simple, Circles, Split, Middle, Full) sit behind the toggle in its header so they can be compared. Every edit goes through the Schedule store, so the Time groups below it are the preview. | `#dates-calendar`, `.dcal`; current version in `data-variant` |
+
 ## Change Dates prefill (Change Dates only, `change-dates-page.js`)
 
 | Term | What it is | Code hook |
