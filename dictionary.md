@@ -2,6 +2,17 @@
 
 Shared names for UI elements in this prototype.
 
+## Pages
+
+| Term | What it is | File |
+|---|---|---|
+| **Badge Overview** | The badge's own page, holding the Start Date editor and the Sections of Schedule rows. It is the site's landing page, so it is `index.html` rather than a name of its own. | `index.html` |
+| **Change Dates** | The date and time editing page, holding the Blocks, the Change Dates calendar and Reset to Defaults. | `change-dates.html` |
+
+Both pages are served as they sit, with no build step, so a link between them is
+a plain relative filename. `.nojekyll` at the root keeps GitHub Pages from
+passing the files through Jekyll.
+
 ## Page links
 
 | Term | What it is | Code hook |
@@ -22,7 +33,7 @@ Shared names for UI elements in this prototype.
 |---|---|---|
 | **Block** | Change Dates: a rounded, bordered box holding a group of controls. The first Block (grey) holds Start Date, Quest Delivery Days, Apply Changes To and Day Mappings. Each Time group below it (white) is also a Block, holding Before time, After time and Preview challenges. On Badge Overview the lookalike box is a Section, not a Block. The Reset to Defaults block is not one: it has no Block actions. | `#bulk-time-change-body .rounded-xl.border-border-1` |
 | **Block actions** | Change Dates: the Block Cancel and Block Save pair at the bottom of every Block, above a top border, with the Block note to their left. Both are greyed out while the Block is unchanged. | `.block-actions`, `[data-block-actions]` (its value is the Block's kind: `settings`, `calendar` or `time`) |
-| **Block Cancel** / **Block Save** | Puts the Block back to how it was when the page loaded or the Block was last saved / takes that mark again. Neither submits anything: the page's own Save at the bottom still does that. A Block owns its own form fields plus one slice of the Schedule store — the first Block the Start Date and Quest Delivery Days, the calendar every row's date, a Time group its own rows' times. Always use the full name so they aren't confused with the form's Save and Cancel at the bottom of the page. | `[data-block-action="cancel"]` / `[data-block-action="save"]` |
+| **Block Cancel** / **Block Save** | Puts the Block back to how it was when the page loaded or the Block was last saved / takes that mark again. Neither submits anything: in the live app the page's own Save at the bottom does that, and here the Demo guards stop even that. A Block owns its own form fields plus one slice of the Schedule store — the first Block the Start Date and Quest Delivery Days, the calendar every row's date, a Time group its own rows' times. Always use the full name so they aren't confused with the form's Save and Cancel at the bottom of the page. | `[data-block-action="cancel"]` / `[data-block-action="save"]` |
 | **Block note** | Line at the left of the Block actions: "Not saved yet" while the Block is changed, then a green "Saved" line for four seconds after Block Save. | `[data-block-note]` |
 
 ## Schedule rows
@@ -45,11 +56,18 @@ Shared names for UI elements in this prototype.
 | **Start Date editor** | The whole widget; it has a view mode and an edit mode | `#badge-inline-date-editor` |
 | **Start Date pill** | View mode: calendar icon, date, pencil. Click opens edit mode. Always use the full name so it isn't confused with a row's Date pill. | `[data-action*="inline-date-editor#enterEditMode"]` |
 | **Clear Start Date button** | X beside the Start Date pill. It has no JS listener, so clicking it does nothing. | `[aria-label="Clear Start Date"]` |
-| **Date field** | Edit mode: input-style button that opens or closes the Calendar | `[data-action*="date-picker#toggle"]` |
-| **Field clear button** | Small x inside the Date field that empties it | `[data-action*="date-picker#clear"]` |
+| **Date field** | Edit mode: the Start Date field, an input-style button that opens or closes the Date-select Calendar. The same widget as the Start Date field on Change Dates. | `[data-action*="date-picker#toggle"]` |
 | **Save button** / **Cancel button** | Green check (saves the Start Date and Delivery Days; every dated row moves to the new date for its Day number) / grey X (reverts) | `.inline-date-action-btn--save` / `--cancel` |
 | **Delivery Days checkboxes** | Mon–Thu toggles in edit mode; applied on Save | `[data-inline-date-editor-target="dayCheckbox"]` |
-| **Date-select Calendar** | Popup under the Date field | `[data-calendar-popup-target]` container |
+
+## Date-select Calendar (both pages, `date-picker.js`)
+
+Drawn under whichever Start Date field it belongs to: the Date field in the Start Date editor's edit mode on Badge Overview, and the Start Date field in the first Block on Change Dates. It only reports the date that was picked; what that date means is the page's business.
+
+| Term | What it is | Code hook |
+|---|---|---|
+| **Date-select Calendar** | Popup under the Start Date field | `[data-calendar-popup-target]` container |
+| **Field clear button** | Small x inside the Start Date field that empties it | `[data-action*="date-picker#clear"]` |
 | **Type-in box** | MM/DD/YYYY text input at the top of the Calendar; Enter commits | `[data-calendar-popup-target="typeInput"]` |
 | **Prev / Next arrows** | Step by a month (day view), a year (month view), or 12 years (year view) | `[data-cal-nav="prev"]` / `[data-cal-nav="next"]` |
 | **Month button** / **Year button** | Header labels that switch to the month or year picker | `[data-calendar-popup-target="monthBtn"]` / `yearBtn` |
@@ -84,13 +102,22 @@ Shared names for UI elements in this prototype.
 |---|---|---|
 | **Reset to Defaults block** | Red box under the last Time group and above the form's Save, holding the Reset to Defaults button. Not a Block: it has no Block actions. | `#reset-defaults-block`, `.reset-block` |
 | **Reset to Defaults button** | Red button that opens the Reset confirm. On confirm it drops every change and applies the Default schedule, which unschedules Week 6 and BONUS. Not the calendar's **Reset dates** button, which only restores the dates the page loaded with. | `[data-reset-defaults]` |
-| **Reset confirm** | "Reset to Defaults?" dialog, built from the page's own confirm template. Says what is dropped and that the form's Save at the bottom is still needed. Closes on its Cancel, its X, the backdrop or Escape. | `.block-confirm`, cloned from `#jt-global-confirm-template` |
+| **Reset confirm** | "Reset to Defaults?" dialog, built from the page's own confirm template. Says what is dropped and that the form's Save at the bottom is still needed, as it is in the live app. Closes on its Cancel, its X, the backdrop or Escape. | `.block-confirm`, cloned from `#jt-global-confirm-template` |
+
+## Start Date and Quest Delivery Days (Change Dates only, `change-dates-page.js`)
+
+The pair at the top of the first Block. They work like the Start Date editor's Date field and Delivery Days checkboxes: the same Date-select Calendar opens under the field, and a change is a preview rather than a submit. What the preview is differs. The editor previews into its own Overview calendar and only reaches the Schedule store on its Save; here the Change Dates calendar and the Time groups are the preview and both are rendered from the store, so a change goes straight into the store and the first Block's Block Cancel is what puts it back. In the live app the form's Save at the bottom of the page is the only thing that submits; here the Demo guards stop it.
+
+| Term | What it is | Code hook |
+|---|---|---|
+| **Start Date field** | Input-style button showing the Start Date; click opens the Date-select Calendar. A picked date, a committed Type-in box or the Field clear button applies it, together with the current Quest Delivery Days, through `setSchedule`: every dated row keeps its Day number and moves to that day's new date. | `#day-schedule-form [data-controller~="date-picker"]` |
+| **Quest Delivery Days checkboxes** | Mon–Thu pills under the Start Date field. Toggling one applies the whole set, together with the Start Date field's current date. Always use the full name so they aren't confused with the editor's Delivery Days checkboxes. | `input[name$="[delivery_days][]"]` |
 
 ## Change Dates prefill (Change Dates only, `change-dates-page.js`)
 
 | Term | What it is | Code hook |
 |---|---|---|
-| **Prefill parameters** | `?start_date=YYYY-MM-DD&delivery_days=monday,tuesday` on the Change Dates URL, set by the Change Dates button. On load they fill the Start Date field and Quest Delivery Days checkboxes without saving: the Schedule store and every row's date stay as they were. An empty `start_date` clears the field; an invalid date is ignored, as are unknown day names. The store rewrites these fields on its next change. | `start_date` / `delivery_days` query parameters |
+| **Prefill parameters** | `?start_date=YYYY-MM-DD&delivery_days=monday,tuesday` on the Change Dates URL, set by the Change Dates button. On load they fill the Start Date field and Quest Delivery Days checkboxes without saving: the Schedule store and every row's date stay as they were. An empty `start_date` clears the field; an invalid date is ignored, as are unknown day names. A prefilled Start Date is not thrown away by the first day that is toggled: both fields go into the store together. Any other change rewrites these fields from the store. | `start_date` / `delivery_days` query parameters |
 
 ## Schedule store (both pages, `schedule-store.js`)
 
@@ -115,3 +142,9 @@ What the store writes on each change:
 | Start Date field (Change Dates) | label text, popup `data-calendar-popup-selected-value` |
 | Quest Delivery Days (Change Dates) | checkbox checked state, `#day-schedule-form` `data-selected-delivery-days` |
 | Start Date editor (Badge Overview) | `data-inline-date-editor-original-start-at-value`, `data-inline-date-editor-original-delivery-days-value`; the editor updates its own pill, field and checkboxes |
+
+## Demo guards (both pages, `demo-guards.js`)
+
+| Term | What it is | Code hook |
+|---|---|---|
+| **Demo guards** | Stops the live app's own controls that came with the captured markup: every form submit on the page (the form's Save at the bottom of Change Dates, Share, theme mode) and every link to `journey.actonacademy.org` (nav, logo, the form's Cancel). Both are cancelled in the capture phase, so the prototype's own handlers still run — the Save button saves to the Schedule store as before, it just never posts. Nothing the prototype does leaves the browser. | `demo-guards.js`, loaded before `schedule-store.js` |

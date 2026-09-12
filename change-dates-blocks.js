@@ -129,8 +129,12 @@
 
   var blocks = [];
 
+  // The Date-select Calendar's Type-in box sits inside the first Block but is
+  // the picker's own scratch field, not one of the Block's: what it commits
+  // reaches the Block through the Schedule store like any other date change.
   function fields(el) {
-    return Array.prototype.slice.call(el.querySelectorAll('input, select, textarea'));
+    return Array.prototype.filter.call(el.querySelectorAll('input, select, textarea'),
+      function (f) { return !f.closest('.cal-popup'); });
   }
   function readFields(el) {
     return fields(el).map(function (f) {
