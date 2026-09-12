@@ -1,14 +1,17 @@
 (function () {
-  // Three prototypes of the Change Dates calendar in one Block, switched by the
+  // Four prototypes of the Change Dates calendar in one Block, switched by the
   // Version toggle, so they can be compared by feel:
   //
   //   Simple  drag one date onto another; hover popup; no options.
+  //   Circles Simple with the Overview calendar's shape: equal columns, the
+  //           Section legend down the left, and a filled circle per scheduled
+  //           date, drawn as a pie when a date holds more than one Section.
   //   Middle  the same drag plus Shift later dates, Undo, and a details panel
   //           under the calendar.
   //   Full    Section ribbons, multi-date selection, week insert/remove, row
   //           drag out of a side panel, and Apply Changes To limiting a drag.
   //
-  // All three edit the Schedule store, so the Time groups below are the preview:
+  // All four edit the Schedule store, so the Time groups below are the preview:
   // their Date pills and Day pills change as soon as a drag lands.
 
   var schedule = window.JourneySchedule;
@@ -24,11 +27,13 @@
   var FILTER_TYPE = { Launch: 'launch', BadgeTask: 'challenge', Close: 'close' };
   var VARIANTS = [
     { id: 'simple', label: 'Simple' },
+    { id: 'circles', label: 'Circles' },
     { id: 'middle', label: 'Middle' },
     { id: 'full', label: 'Full' }
   ];
   var HINTS = {
     simple: 'Drag a date onto another date. An empty date takes its rows; a date that has rows swaps with it. Hover a date to see what is scheduled.',
+    circles: 'Drag a date onto another date, the same as Simple. A filled circle is a scheduled date, coloured by its Section; a date holding more than one Section is split into a pie by row count. Hover a date to see its rows.',
     middle: 'Drag a date onto another date to move or swap it. With Shift later dates on, that date and every date after it move together. Click a date to keep it in the panel below.',
     full: 'Click a date to select it, Shift-click for a range, Ctrl-click to add one. Drag the selection to move it, drag a row out of the panel to move just that row, or use + and − beside a week to insert or remove a week.'
   };
@@ -100,6 +105,38 @@
     // Simple: one dot per row, in its Section's colour.
     '.dcal-dots{display:flex;flex-wrap:wrap;gap:3px;justify-content:center}' +
     '.dcal-dot{background:var(--dm);border-radius:var(--radius-pill);flex:none;height:7px;width:7px}' +
+    // Circles: the Overview calendar's shape, with the legend beside the grid.
+    // The circle is the whole date here, so nothing in this view draws a
+    // rectangle: no week rules, no month tint, and every state rides on the
+    // circle itself rather than on the cell's edges.
+    // Capped rather than fit-content: shrink-to-fit collapsed the card so far
+    // that the legend wrapped above the grid instead of sitting beside it.
+    '.dcal-card--circles{display:flex;flex-wrap:wrap;gap:18px;max-width:780px}' +
+    '.dcal[data-variant="circles"] .dcal-card{padding:10px 12px}' +
+    '.dcal[data-variant="circles"] .dcal-week{border-top:0}' +
+    '.dcal[data-variant="circles"] .dcal-d.is-alt-month{background:none}' +
+    '.dcal-grid-wrap{flex:1 1 320px;max-width:520px;min-width:0}' +
+    '.dcal-legend--side{align-content:flex-start;flex:0 0 196px;flex-direction:column;gap:9px;margin-top:6px;padding:4px 16px 4px 4px}' +
+    '.dcal-d--circle{align-items:center;justify-content:center;min-height:46px}' +
+    '.dcal-d--circle .dcal-d-body{align-items:center}' +
+    // No hatching here: a date with no circle already reads as nothing due.
+    '.dcal-d--circle.is-off{background-image:none}' +
+    '.dcal-circle{align-items:center;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(15,23,42,.08);display:inline-flex;font-size:12px;font-weight:var(--weight-semibold);height:28px;justify-content:center;position:relative;transition:transform .12s ease,box-shadow .12s ease;width:28px}' +
+    '.dcal-circle.is-plain{background:none;box-shadow:none;color:var(--fg-1);font-weight:var(--weight-regular)}' +
+    '.dcal-d--circle.is-off .dcal-circle.is-plain,.dcal-d.is-out .dcal-circle.is-plain{color:var(--fg-3);opacity:.5}' +
+    '.dcal-circle.is-start-ring{box-shadow:0 0 0 2px var(--bg-surface),0 0 0 4px var(--accent)}' +
+    // Hovering grows the circle instead of outlining the cell.
+    '.dcal-d--circle.has-rows:hover{box-shadow:none}' +
+    '.dcal-d--circle.has-rows:hover .dcal-circle{box-shadow:var(--shadow-md);transform:scale(1.3);z-index:1}' +
+    '.dcal-d--circle.is-drag-source{opacity:.45;outline:0}' +
+    '.dcal-d--circle.is-will-land,.dcal-d--circle.is-will-double,.dcal-d--circle.is-drop-target,.dcal-d--circle.is-drop-invalid{background-color:transparent;box-shadow:none}' +
+    '.dcal-d--circle.is-will-land .dcal-circle{box-shadow:0 0 0 2px var(--bg-surface),0 0 0 4px var(--accent)}' +
+    '.dcal-d--circle.is-will-double .dcal-circle{box-shadow:0 0 0 2px var(--bg-surface),0 0 0 4px var(--st-late)}' +
+    '.dcal-d--circle.is-drop-target .dcal-circle{box-shadow:0 0 0 2px var(--bg-surface),0 0 0 4px var(--accent);transform:scale(1.3);z-index:1}' +
+    '.dcal-d--circle.is-drop-invalid .dcal-circle{box-shadow:0 0 0 2px var(--bg-surface),0 0 0 4px var(--st-overdue)}' +
+    '.dcal-d--circle.is-flash{animation:none}' +
+    '.dcal-d--circle.is-flash .dcal-circle{animation:dcal-flash-ring 1.1s ease-out}' +
+    '@keyframes dcal-flash-ring{0%{box-shadow:0 0 0 2px var(--bg-surface),0 0 0 5px var(--accent)}100%{box-shadow:none}}' +
     // Middle: one chip per Section on that date.
     '.dcal-chip{align-items:center;background:color-mix(in srgb,var(--dm) 16%,var(--bg-surface));border-left:3px solid var(--dm);border-radius:4px;color:var(--fg-1);display:flex;font-size:10px;font-weight:var(--weight-semibold);gap:4px;justify-content:space-between;line-height:1;overflow:hidden;padding:3px 4px;white-space:nowrap}' +
     '.dcal-chip span{color:var(--fg-2);font-weight:var(--weight-regular)}' +
@@ -194,6 +231,7 @@
       short: shortName(section.name),
       order: i,
       // The Day Mappings palette: eight colours for eight Sections.
+      index: i % 8,
       color: 'var(--day-map-' + (i % 8) + ')'
     };
     sectionOrder.push(section.id);
@@ -206,13 +244,34 @@
     return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
   }
   function sectionOf(row) {
-    return sections[row.sectionId] || { id: row.sectionId, name: 'Other', short: 'Other', order: 99, color: 'var(--fg-3)' };
+    return sections[row.sectionId] ||
+      { id: row.sectionId, name: 'Other', short: 'Other', order: 99, index: -1, color: 'var(--fg-3)' };
   }
+
+  // Circles view: a date number sits on its Section's colour, so the text has
+  // to flip to dark on the light end of the palette. Read from the page rather
+  // than hard-coded, so a themed palette still works.
+  var paletteText = [];
+  function readPalette() {
+    var root = getComputedStyle(document.documentElement);
+    paletteText = [];
+    for (var i = 0; i < 8; i++) {
+      var found = /^#?([0-9a-f]{6})$/i.exec((root.getPropertyValue('--day-map-' + i) || '').trim());
+      if (!found) { paletteText.push('#fff'); continue; }
+      var n = parseInt(found[1], 16);
+      var luma = (0.299 * (n >> 16 & 255) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255;
+      paletteText.push(luma > 0.62 ? 'var(--fg-1)' : '#fff');
+    }
+  }
+  function textOn(section) { return paletteText[section.index] || '#fff'; }
 
   // ---- State -----------------------------------------------------------------
 
   var variant = 'simple';
-  try { var saved = localStorage.getItem(VARIANT_KEY); if (saved === 'middle' || saved === 'full') variant = saved; } catch (e) {}
+  try {
+    var saved = localStorage.getItem(VARIANT_KEY);
+    if (saved === 'circles' || saved === 'middle' || saved === 'full') variant = saved;
+  } catch (e) {}
 
   var shiftLater = false;   // Middle / Full: drag moves every later date too
   var showEarlier = false;  // include rows before the Start Date's week
@@ -227,7 +286,8 @@
   var undoStack = [], flashDates = [];
   var model = null;
 
-  function shiftOn() { return variant !== 'simple' && shiftLater; }
+  function hasPanel() { return variant === 'middle' || variant === 'full'; }
+  function shiftOn() { return hasPanel() && shiftLater; }
 
   // ---- Model -----------------------------------------------------------------
 
@@ -534,6 +594,38 @@
 
   // ---- Rendering -------------------------------------------------------------
 
+  // Circles: one filled circle per scheduled date, split into a pie by row
+  // count when a date holds more than one Section.
+  function circleHTML(iso, rows) {
+    var num = parseISO(iso).getUTCDate();
+    var ring = iso === model.startDate ? ' is-start-ring' : '';
+    if (!rows.length) {
+      return '<div class="dcal-d-body"><span class="dcal-circle is-plain' + ring + '">' + num + '</span></div>';
+    }
+    var counts = {}, order = [];
+    rows.forEach(function (row) {
+      var section = sectionOf(row);
+      if (!(section.id in counts)) { counts[section.id] = 0; order.push(section); }
+      counts[section.id]++;
+    });
+    var fill, dominant = order[0];
+    if (order.length === 1) {
+      fill = dominant.color;
+    } else {
+      var slices = [], at = 0;
+      order.forEach(function (section) {
+        var end = at + counts[section.id] / rows.length * 360;
+        slices.push(section.color + ' ' + at.toFixed(1) + 'deg ' + end.toFixed(1) + 'deg');
+        at = end;
+        if (counts[section.id] > counts[dominant.id]) dominant = section;
+      });
+      fill = 'conic-gradient(' + slices.join(',') + ')';
+    }
+    // The number has to read against the slice it mostly sits on.
+    return '<div class="dcal-d-body"><span class="dcal-circle' + ring + '" style="background:' + fill +
+      ';color:' + textOn(dominant) + '">' + num + '</span></div>';
+  }
+
   function cellBodyHTML(iso, weekSections, firstOfSection) {
     var rows = rowsOn(iso);
     if (variant === 'simple') {
@@ -600,15 +692,20 @@
       var classes = 'dcal-d';
       if (monthIndex(iso) % 2 !== monthIndex(model.anchor) % 2) classes += ' is-alt-month';
       if (!isDelivery(iso)) classes += ' is-off';
-      if (!model.wide[weekdayIndex(iso)]) classes += ' is-narrow';
+      if (variant !== 'circles' && !model.wide[weekdayIndex(iso)]) classes += ' is-narrow';
       if (rows.length) classes += ' has-rows';
       if (iso === model.startDate) classes += ' is-start';
       if (iso > model.inRangeEnd) classes += ' is-out';
+      if (variant === 'circles') {
+        cells += '<div class="' + classes + ' dcal-d--circle" data-date="' + iso + '">' +
+          circleHTML(iso, rows) + '</div>';
+        continue;
+      }
       var moved = variant === 'full' && rows.some(function (row) {
         var original = schedule.getOriginalRow(row.id);
         return original && original.dueDate && original.dueDate !== row.dueDate;
       });
-      var day = variant !== 'simple' && isDelivery(iso) ? schedule.scheduledDayFor(iso) : null;
+      var day = hasPanel() && isDelivery(iso) ? schedule.scheduledDayFor(iso) : null;
       var top = '<span class="dcal-num">' + parseISO(iso).getUTCDate() + '</span>';
       if (!model.wide[weekdayIndex(iso)]) {
         cells += '<div class="' + classes + '" data-date="' + iso + '"><div class="dcal-d-top">' + top + '</div>' +
@@ -634,9 +731,11 @@
 
   function gridHTML() {
     var cols = (variant === 'full' ? '44px' : '32px');
-    for (var i = 0; i < 7; i++) cols += model.wide[i] ? ' minmax(0,1fr)' : ' 26px';
+    // Circles gives every weekday the same width, like the Overview calendar.
+    var equal = variant === 'circles';
+    for (var i = 0; i < 7; i++) cols += equal || model.wide[i] ? ' minmax(0,1fr)' : ' 26px';
     var head = '<div class="dcal-dh"><span></span>';
-    for (var j = 0; j < 7; j++) head += '<span>' + (model.wide[j] ? DAY_SHORT[j] : DAY_SHORT[j].charAt(0)) + '</span>';
+    for (var j = 0; j < 7; j++) head += '<span>' + (equal || model.wide[j] ? DAY_SHORT[j] : DAY_SHORT[j].charAt(0)) + '</span>';
     head += '</div>';
 
     var weeks = '', labelled = null;
@@ -657,7 +756,7 @@
     });
     shown.sort(function (a, b) { return sectionOf({ sectionId: a }).order - sectionOf({ sectionId: b }).order; });
     if (!shown.length) return '';
-    return '<div class="dcal-legend">' + shown.map(function (id) {
+    return '<div class="dcal-legend' + (variant === 'circles' ? ' dcal-legend--side' : '') + '">' + shown.map(function (id) {
       var section = sectionOf({ sectionId: id });
       return '<span class="dcal-legend-item" data-sec="' + esc(id) + '">' +
         '<span class="dcal-swatch" style="--dm:' + section.color + '"></span>' + esc(section.name) + '</span>';
@@ -665,7 +764,7 @@
   }
 
   function toolsHTML() {
-    if (variant === 'simple') return '';
+    if (!hasPanel()) return '';
     var types = movableTypes();
     var limited = variant === 'full' && !(types.launch && types.challenge && types.close);
     return '<div class="dcal-tools">' +
@@ -680,6 +779,7 @@
   }
 
   function render() {
+    readPalette();
     model = buildModel();
     var range = shortDate(model.firstWeek) + ' – ' + shortDate(model.lastDate);
     var earlier = model.hidden.length ?
@@ -705,8 +805,12 @@
       '<div class="input-explanation dcal-hint">' + esc(HINTS[variant]) + '</div>' +
       toolsHTML() +
       '<div class="dcal-body">' +
-      '<div class="dcal-card">' + earlier + gridHTML() + legendHTML() + '</div>' +
-      (variant === 'simple' ? '' : '<div class="dcal-panel" data-dcal-panel></div>') +
+      '<div class="dcal-card' + (variant === 'circles' ? ' dcal-card--circles' : '') + '">' +
+      (variant === 'circles'
+        ? legendHTML() + '<div class="dcal-grid-wrap">' + earlier + gridHTML() + '</div>'
+        : earlier + gridHTML() + legendHTML()) +
+      '</div>' +
+      (hasPanel() ? '<div class="dcal-panel" data-dcal-panel></div>' : '') +
       '</div>';
 
     if (flashDates.length) {
@@ -761,7 +865,7 @@
   document.body.appendChild(popup);
 
   function updatePopup() {
-    if (variant !== 'simple' || drag || !hoverISO || !rowsOn(hoverISO).length) {
+    if (hasPanel() || drag || !hoverISO || !rowsOn(hoverISO).length) {
       popup.style.display = 'none';
       return;
     }
@@ -800,7 +904,7 @@
 
     // Hovering a Schedule row below the calendar lights up its date.
     var linked = null;
-    if (variant !== 'simple') {
+    if (hasPanel()) {
       var item = elementAt(e.target, '[data-bulk-time-change-target="challengeItem"]');
       var article = item && item.querySelector('article.cl-row');
       var row = article && schedule.getRow(article.id);
