@@ -311,10 +311,10 @@
 
   // ---- State -----------------------------------------------------------------
 
-  var variant = 'simple';
+  var variant = 'split';
   try {
     var saved = localStorage.getItem(VARIANT_KEY);
-    if (saved === 'circles' || saved === 'split' || saved === 'middle' || saved === 'full') variant = saved;
+    if (saved === 'simple' || saved === 'circles' || saved === 'split' || saved === 'middle' || saved === 'full') variant = saved;
   } catch (e) {}
 
   var shiftLater = false;   // Middle / Full: drag moves every later date too
