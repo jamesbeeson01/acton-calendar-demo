@@ -9,7 +9,9 @@
   //   Split   Circles rearranged: the details Circles shows in a hover popup
   //           sit in a pane down the left instead, and the Section legend
   //           moves to the right of the grid. Clicking a date keeps it in the
-  //           pane, the way Middle does.
+  //           pane, the way Middle does, and the pane itself is a drag source:
+  //           a whole date from the grid, one Section's rows on that date, or
+  //           a single row, all onto another date.
   //   Middle  the same drag plus Shift later dates, Undo, and a details panel
   //           under the calendar.
   //   Full    Section ribbons, multi-date selection, week insert/remove, row
@@ -39,7 +41,7 @@
   var HINTS = {
     simple: 'Drag a date onto another date. An empty date takes its rows; a date that has rows swaps with it. Hover a date to see what is scheduled.',
     circles: 'Drag a date onto another date, the same as Simple. A filled circle is a scheduled date, coloured by its Section; a date holding more than one Section is split into a pie by row count. Hover a date to see its rows.',
-    split: 'The same grid and drag as Circles, with the Section legend beside it and the details in the pane on the left, so hovering a date never covers the calendar. Click a date to keep it in the pane; click it again to let go.',
+    split: 'The same grid and drag as Circles, with the details in the pane on the left and the Section legend on the right. Click a date to keep it in the pane, then drag a row, or a Section header, out of the pane onto another date.',
     middle: 'Drag a date onto another date to move or swap it. With Shift later dates on, that date and every date after it move together. Click a date to keep it in the panel below.',
     full: 'Click a date to select it, Shift-click for a range, Ctrl-click to add one. Drag the selection to move it, drag a row out of the panel to move just that row, or use + and − beside a week to insert or remove a week.'
   };
@@ -185,7 +187,12 @@
     '.dcal-det-rows{display:flex;flex-direction:column;gap:2px;list-style:none;margin:0;padding:0}' +
     '.dcal-det-row{align-items:center;border-radius:6px;cursor:pointer;display:flex;gap:6px;padding:3px 4px}' +
     '.dcal-det-row:hover{background:var(--bg-subtle)}' +
-    '.dcal[data-variant="full"] .dcal-det-row{cursor:grab}' +
+    '.dcal[data-variant="full"] .dcal-det-row,.dcal[data-variant="split"] .dcal-det-row{cursor:grab}' +
+    // Split: a Section header is a handle too, so it takes a row's padding and
+    // hover fill. The margin loses what the padding adds, keeping the spacing
+    // the other prototypes have.
+    '.dcal[data-variant="split"] .dcal-det-sec{border-radius:6px;cursor:grab;margin:5px 0 0;padding:3px 4px}' +
+    '.dcal[data-variant="split"] .dcal-det-sec:hover{background:var(--bg-subtle)}' +
     '.dcal-det-row.is-locked{opacity:.5}' +
     '.dcal-det-row .cl-pill{flex:none}' +
     '.dcal-det-title{color:var(--fg-1);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
@@ -315,6 +322,10 @@
   function hasTools() { return variant === 'middle' || variant === 'full'; }
   // Clicking a date keeps it in the panel in these two.
   function hasPin() { return variant === 'middle' || variant === 'split'; }
+  // Split drags at three grains: a whole date from the grid, one Section's
+  // rows on that date, or a single row. Full has always dragged single rows.
+  function canDragRow() { return variant === 'full' || variant === 'split'; }
+  function canDragSection() { return variant === 'split'; }
   function shiftOn() { return hasTools() && shiftLater; }
 
   // ---- Model -----------------------------------------------------------------
@@ -531,6 +542,23 @@
     };
   }
 
+  // One Section's rows on one date: the grain between a row and the whole
+  // date, so the rest of that date stays where it is.
+  function planSection(iso, sectionId, target) {
+    var section = sectionOf({ sectionId: sectionId });
+    var here = sectionRowsOn(iso, sectionId);
+    if (!here.length || iso === target) return null;
+    var movable = here.filter(function (row) { return row.movable; });
+    if (!movable.length) return invalidPlan('Apply Changes To leaves every ' + section.name + ' row out.');
+    var moves = movable.map(function (row) { return { id: row.id, to: target }; });
+    var doubled = doubledDates(moves);
+    return {
+      tag: 'Move section', moves: moves, from: [iso], to: [target], select: [target], doubled: doubled,
+      sentence: 'Move ' + section.name + ' on ' + dayLabel(iso) + ' (' + rowsLabel(movable.length) +
+        ') to ' + dayLabel(target) + '.' + doubledNote(doubled)
+    };
+  }
+
   // ---- Applying --------------------------------------------------------------
 
   function apply(plan) {
@@ -576,7 +604,8 @@
       var section = sectionOf(row);
       if (section.id !== lastSection) {
         if (lastSection !== null) out += '</ul>';
-        out += '<div class="dcal-det-sec"><span class="dcal-swatch" style="--dm:' + section.color + '"></span>' +
+        out += '<div class="dcal-det-sec" data-sec="' + esc(section.id) + '" data-det-date="' + esc(iso) +
+          '"><span class="dcal-swatch" style="--dm:' + section.color + '"></span>' +
           esc(section.name) + '</div><ul class="dcal-det-rows">';
         lastSection = section.id;
       }
@@ -614,8 +643,10 @@
     if (variant === 'full' && selection.length === 1) {
       return detailsHTML(selection[0], { hint: 'Drag a row onto another date to move just that row.' });
     }
-    if (hasPin() && pinnedISO) return detailsHTML(pinnedISO);
-    if (lastHoverISO) return detailsHTML(lastHoverISO);
+    var restHint = variant === 'split' ?
+      { hint: 'Drag a row, or a Section header, onto another date to move just those rows.' } : null;
+    if (hasPin() && pinnedISO) return detailsHTML(pinnedISO, restHint);
+    if (lastHoverISO) return detailsHTML(lastHoverISO, restHint);
     return '<p class="dcal-empty">Hover a date to see what is scheduled on it' +
       (variant === 'full' ? ', or click one to select it.' :
         variant === 'split' ? ', or click one to keep it here.' : '.') + '</p>';
@@ -962,6 +993,10 @@
 
   function ghostLabel() {
     if (drag.kind === 'row') return model.rowById[drag.rowId].title;
+    if (drag.kind === 'section') {
+      return sectionOf({ sectionId: drag.secId }).name + ' · ' +
+        rowsLabel(sectionRowsOn(drag.secDate, drag.secId).length);
+    }
     var rows = drag.sources.reduce(function (n, iso) { return n + movableOn(iso).length; }, 0);
     var base = drag.sources.length === 1 ? shortDate(drag.sources[0]) + ' · ' + rowsLabel(rows) :
       drag.sources.length + ' dates · ' + rowsLabel(rows);
@@ -971,6 +1006,7 @@
   function planFor(target) {
     if (!target) return null;
     if (drag.kind === 'row') return planRow(drag.rowId, target);
+    if (drag.kind === 'section') return planSection(drag.secDate, drag.secId, target);
     if (shiftOn()) return planShift(drag.sources[0], drag.anchor, target);
     return planDates(drag.sources, drag.anchor, target);
   }
@@ -978,8 +1014,12 @@
   function startDrag() {
     if (press.rowId) {
       var row = model.rowById[press.rowId];
-      if (variant !== 'full' || !row) return false;
+      if (!canDragRow() || !row) return false;
       drag = { kind: 'row', rowId: press.rowId, sources: [row.dueDate], anchor: row.dueDate, target: null, plan: null };
+    } else if (press.secId) {
+      if (!canDragSection() || !sectionRowsOn(press.secDate, press.secId).length) return false;
+      drag = { kind: 'section', secId: press.secId, secDate: press.secDate, sources: [press.secDate],
+        anchor: press.secDate, target: null, plan: null };
     } else {
       var sources = variant === 'full' && selection.indexOf(press.iso) !== -1 ? selection.slice().sort() : [press.iso];
       var hasRows = sources.some(function (iso) { return movableOn(iso).length > 0; });
@@ -1012,11 +1052,14 @@
     if (e.button !== 0) return;
     if (elementAt(e.target, 'button')) return;
     var rowEl = elementAt(e.target, '.dcal-det-row[data-row-id]');
+    var secEl = elementAt(e.target, '.dcal-det-sec[data-det-date]');
     var cell = elementAt(e.target, '.dcal-d[data-date]');
-    if (!rowEl && !cell) return;
+    if (!rowEl && !secEl && !cell) return;
     press = {
       x: e.clientX, y: e.clientY, blocked: false,
       rowId: rowEl ? rowEl.dataset.rowId : null,
+      secId: secEl ? secEl.dataset.sec : null,
+      secDate: secEl ? secEl.dataset.detDate : null,
       iso: cell ? cell.dataset.date : null,
       range: e.shiftKey, toggle: e.ctrlKey || e.metaKey
     };
@@ -1061,7 +1104,10 @@
       }
     } else if (press && !press.blocked) {
       if (press.rowId) scrollToRow(press.rowId);
-      else if (press.iso) clickDate(press);
+      else if (press.secId) {
+        var first = sectionRowsOn(press.secDate, press.secId)[0];
+        if (first) scrollToRow(first.id);
+      } else if (press.iso) clickDate(press);
     }
     press = null;
   }
