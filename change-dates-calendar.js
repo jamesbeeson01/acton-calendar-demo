@@ -14,7 +14,8 @@
   //           a single row, all onto another date. The legend is a fourth
   //           grain: hover a Section to light up its dates and list its rows,
   //           click to keep them, drag it onto a date to lay the whole Section
-  //           out from there.
+  //           out from there. A click on empty space, in the Block or outside
+  //           it, lets the pane go again.
   //   Middle  the same drag plus Shift later dates, Undo, and a details panel
   //           under the calendar.
   //   Full    Section ribbons, multi-date selection, week insert/remove, row
@@ -44,7 +45,7 @@
   var HINTS = {
     simple: 'Drag a date onto another date. An empty date takes its rows; a date that has rows swaps with it. Hover a date to see what is scheduled.',
     circles: 'Drag a date onto another date, the same as Simple. A filled circle is a scheduled date, coloured by its Section; a date holding more than one Section is split into a pie by row count. Hover a date to see its rows.',
-    split: 'The same grid and drag as Circles, with the details in the pane on the left and the Section legend on the right. Click a date to keep it in the pane, then drag a row, or a Section header, out of the pane onto another date. Hover a Section in the legend to light up its dates and list its rows, click it to keep them, or drag it onto a date to lay the whole Section out from there on the delivery days.',
+    split: 'The same grid and drag as Circles, with the details in the pane on the left and the Section legend on the right. Click a date to keep it in the pane, then drag a row, or a Section header, out of the pane onto another date. Hover a Section in the legend to light up its dates and list its rows, click it to keep them, or drag it onto a date to lay the whole Section out from there on the delivery days. Click empty space, or anywhere outside the Block, to let the pane go.',
     middle: 'Drag a date onto another date to move or swap it. With Shift later dates on, that date and every date after it move together. Click a date to keep it in the panel below.',
     full: 'Click a date to select it, Shift-click for a range, Ctrl-click to add one. Drag the selection to move it, drag a row out of the panel to move just that row, or use + and − beside a week to insert or remove a week.'
   };
@@ -1178,7 +1179,14 @@
     var secEl = elementAt(e.target, '[data-det-date][data-sec]');
     var legEl = canDragSection() ? elementAt(e.target, '.dcal-legend-item[data-sec]') : null;
     var cell = elementAt(e.target, '.dcal-d[data-date]');
-    if (!rowEl && !secEl && !legEl && !cell) return;
+    if (!rowEl && !secEl && !legEl && !cell) {
+      // Nothing under the pointer: in Split that is the Block's whitespace,
+      // which deselects on release. Nothing is dragged, so no move listener.
+      if (!canDeselect()) return;
+      press = { blank: true };
+      document.addEventListener('pointerup', onPointerUp);
+      return;
+    }
     press = {
       x: e.clientX, y: e.clientY, blocked: false,
       rowId: rowEl ? rowEl.dataset.rowId : null,
@@ -1191,6 +1199,13 @@
     document.addEventListener('pointermove', onPointerMove);
     document.addEventListener('pointerup', onPointerUp);
     document.addEventListener('keydown', onKeyDown);
+  });
+
+  // The other half of the same gesture: a press anywhere outside the Block
+  // lets the pane go as well, the way the Date-select Calendar closes.
+  document.addEventListener('pointerdown', function (e) {
+    if (e.button !== 0 || mount.contains(e.target)) return;
+    deselect();
   });
 
   function onPointerMove(e) {
@@ -1227,6 +1242,8 @@
       } else {
         decorate();
       }
+    } else if (press && press.blank) {
+      deselect();
     } else if (press && !press.blocked) {
       if (press.legendSec) clickSection(press.legendSec);
       else if (press.rowId) scrollToRow(press.rowId);
@@ -1274,6 +1291,18 @@
   function clickSection(sectionId) {
     pinnedSection = pinnedSection === sectionId ? null : sectionId;
     if (pinnedSection) pinnedISO = null;
+    decorate();
+  }
+
+  // Split: whatever the pane is keeping — a date or a Section — is let go by a
+  // click that lands on nothing. Only Split keeps a Section, and only Split
+  // says so in its hint, so Middle's pin is left alone.
+  function canDeselect() { return variant === 'split' && !!(pinnedISO || pinnedSection); }
+
+  function deselect() {
+    if (!canDeselect()) return;
+    pinnedISO = null;
+    pinnedSection = null;
     decorate();
   }
 
