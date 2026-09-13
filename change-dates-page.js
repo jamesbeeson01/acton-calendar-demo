@@ -13,7 +13,6 @@
   // back. Nothing is submitted either way: the form's Save at the bottom of
   // the page still does that.
 
-  var MONTH_LONG = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   var WEEKDAYS = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
   var DELIVERY_DAY_SELECTOR = 'input[type="checkbox"][name$="[delivery_days][]"]';
 
@@ -36,29 +35,22 @@
   // The Overview calendar's Change Dates button opens this page with the Start
   // Date editor's choices, saved or not:
   //   ?start_date=YYYY-MM-DD&delivery_days=monday,tuesday
-  // They fill the Start Date field and Quest Delivery Days like form defaults.
-  // Nothing is saved on load: the Schedule store and every row's date stay as
-  // they were until one of the two is changed below.
+  // They are applied like a change made in the two fields, once the page has
+  // loaded (see the end of this file), so the Change Dates calendar and the
+  // Time groups show them straight away.
+  var prefill = {};
 
   // Start Date field. An empty value clears it; an invalid one is ignored.
   if (params.has('start_date')) {
     var startISO = params.get('start_date');
-    var start = parseRealDate(startISO);
-    if (field && (start || startISO === '')) {
-      var label = field.querySelector('[data-date-picker-target="label"]');
-      if (label) label.textContent = start ? MONTH_LONG[start.m] + ' ' + start.d + ', ' + start.y : field.dataset.datePickerPlaceholderValue;
-      if (popup) popup.setAttribute('data-calendar-popup-selected-value', startISO);
-    }
+    if (parseRealDate(startISO)) prefill.startDate = startISO;
+    else if (startISO === '') prefill.startDate = null;
   }
 
   // Quest Delivery Days. Unknown names are dropped; days are kept in week order.
   if (params.has('delivery_days')) {
     var requested = params.get('delivery_days').split(',');
-    var days = WEEKDAYS.filter(function (d) { return requested.indexOf(d) !== -1; });
-    form.setAttribute('data-selected-delivery-days', JSON.stringify(days));
-    document.querySelectorAll(DELIVERY_DAY_SELECTOR).forEach(function (box) {
-      box.checked = days.indexOf(box.value) !== -1;
-    });
+    prefill.deliveryDays = WEEKDAYS.filter(function (d) { return requested.indexOf(d) !== -1; });
   }
 
   // ---- Into the store --------------------------------------------------------
@@ -74,8 +66,7 @@
   }
 
   // Both fields go in together, the way the Start Date editor's Save sends
-  // both, so a Start Date left over from the Prefill parameters is applied by
-  // the first delivery day that is toggled rather than being thrown away.
+  // both.
   function applySettings() {
     schedule.setSchedule({ startDate: datePicker.getSelectedISO(), deliveryDays: checkedDeliveryDays() });
   }
@@ -92,4 +83,13 @@
   schedule.subscribe(function () {
     if (schedule.getStartDate() !== datePicker.getSelectedISO()) datePicker.resetTo(schedule.getStartDate());
   });
+
+  // The Prefill parameters go into the store after every script on the page
+  // has run, so the Blocks take their Block Cancel mark from the schedule as
+  // it was saved: the prefill is an ordinary unsaved change to the first
+  // Block, which its Block Cancel or Undo takes back. The store rewrites both
+  // fields and the calendar redraws from its change.
+  if ('startDate' in prefill || 'deliveryDays' in prefill) {
+    document.addEventListener('DOMContentLoaded', function () { schedule.setSchedule(prefill); });
+  }
 })();

@@ -118,7 +118,7 @@ The pair at the top of the first Block. They work like the Start Date editor's D
 
 | Term | What it is | Code hook |
 |---|---|---|
-| **Prefill parameters** | `?start_date=YYYY-MM-DD&delivery_days=monday,tuesday` on the Change Dates URL, set by the Change Dates button. On load they fill the Start Date field and Quest Delivery Days checkboxes without saving: the Schedule store and every row's date stay as they were. An empty `start_date` clears the field; an invalid date is ignored, as are unknown day names. A prefilled Start Date is not thrown away by the first day that is toggled: both fields go into the store together. Any other change rewrites these fields from the store. | `start_date` / `delivery_days` query parameters |
+| **Prefill parameters** | `?start_date=YYYY-MM-DD&delivery_days=monday,tuesday` on the Change Dates URL, set by the Change Dates button. Once the page has loaded they are applied like a change made in the Start Date field and Quest Delivery Days checkboxes: they go into the Schedule store, so the Change Dates calendar and the Time groups show them straight away. The Blocks take their mark first, so the prefill is an unsaved change to the first Block that its Block Cancel or Undo takes back. An empty `start_date` clears the field; an invalid date is ignored, as are unknown day names. | `start_date` / `delivery_days` query parameters |
 
 ## Schedule store (both pages, `schedule-store.js`)
 
