@@ -310,11 +310,63 @@
 
   var listeners = [];
 
-  function commit(change) {
-    save();
-    render();
+  // ---- Undo history ----------------------------------------------------------
+
+  // Every change is one step: a calendar drop, a Start Date or Quest Delivery
+  // Days change, a Block Cancel, Reset dates, Reset to Defaults. Kept for this
+  // page load only, not in localStorage. An undone change can be redone until
+  // a new change is made.
+  var HISTORY_LIMIT = 100;
+  var undoHistory = [], redoHistory = [];
+
+  function snapshot() {
+    var rows = {};
+    rowOrder.forEach(function (id) {
+      var row = state.rows[id];
+      rows[id] = { dueDate: row.dueDate, dueTime: row.dueTime, scheduledDay: row.scheduledDay };
+    });
+    return { startDate: state.startDate, deliveryDays: state.deliveryDays.slice(), rows: rows };
+  }
+
+  function notify(change) {
     listeners.slice().forEach(function (fn) { fn(change); });
   }
+
+  // before: the snapshot taken ahead of the change. A change that changed
+  // nothing is not a step.
+  function commit(change, before) {
+    if (JSON.stringify(before) !== JSON.stringify(snapshot())) {
+      undoHistory.push(before);
+      if (undoHistory.length > HISTORY_LIMIT) undoHistory.shift();
+      redoHistory = [];
+    }
+    save();
+    render();
+    notify(change);
+  }
+
+  // Undo and redo are the same step in opposite directions: the snapshot taken
+  // off one history is restored, and the schedule as it stood goes onto the
+  // other. rowIds on the change are the rows whose date, time or day it moved.
+  function step(from, to, type) {
+    var last = from.pop();
+    if (!last) return false;
+    to.push(snapshot());
+    var rowIds = rowOrder.filter(function (id) {
+      var row = state.rows[id], was = last.rows[id];
+      return row.dueDate !== was.dueDate || row.dueTime !== was.dueTime || row.scheduledDay !== was.scheduledDay;
+    });
+    state.startDate = last.startDate;
+    state.deliveryDays = last.deliveryDays;
+    rowIds.forEach(function (id) { Object.assign(state.rows[id], last.rows[id]); });
+    save();
+    render();
+    notify({ type: type, rowIds: rowIds });
+    return true;
+  }
+
+  function undo() { return step(undoHistory, redoHistory, 'undo'); }
+  function redo() { return step(redoHistory, undoHistory, 'redo'); }
 
   function checkRowChanges(id, changes) {
     if (!state.rows[id]) throw new Error('Unknown schedule row: ' + id);
@@ -338,8 +390,9 @@
   // too; a null dueDate unschedules the row.
   function updateRow(id, changes) {
     checkRowChanges(id, changes);
+    var before = snapshot();
     applyRowChanges(id, changes);
-    commit({ type: 'row', rowId: id });
+    commit({ type: 'row', rowId: id }, before);
     return copy(state.rows[id]);
   }
 
@@ -349,8 +402,9 @@
   // applied unless every entry is valid.
   function updateRows(list) {
     list.forEach(function (changes) { checkRowChanges(changes.id, changes); });
+    var before = snapshot();
     list.forEach(function (changes) { applyRowChanges(changes.id, changes); });
-    commit({ type: 'rows', rowIds: list.map(function (changes) { return changes.id; }) });
+    commit({ type: 'rows', rowIds: list.map(function (changes) { return changes.id; }) }, before);
   }
 
   // changes: { startDate: 'YYYY-MM-DD' | null, deliveryDays: ['monday', ...] }, both optional.
@@ -364,6 +418,7 @@
         changes.deliveryDays.every(function (d) { return WEEKDAYS.indexOf(d) !== -1; }))) {
       throw new Error('deliveryDays must be lowercase weekday names, e.g. ["monday"]');
     }
+    var before = snapshot();
     if ('startDate' in changes) state.startDate = changes.startDate;
     if ('deliveryDays' in changes) state.deliveryDays = weekOrder(changes.deliveryDays);
     rowOrder.forEach(function (id) {
@@ -372,26 +427,28 @@
       var date = row.dueDate && row.scheduledDay ? dateForScheduledDay(row.scheduledDay) : null;
       if (date) row.dueDate = date;
     });
-    commit({ type: 'schedule' });
+    commit({ type: 'schedule' }, before);
   }
 
   function reset() {
+    var before = snapshot();
     stored = { rows: {} };
     try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
     buildState();
-    commit({ type: 'reset' });
+    commit({ type: 'reset' }, before);
   }
 
   // Drops every stored change and puts the page back to the intended original
   // schedule, which leaves Week 6 and BONUS unscheduled. Unlike reset() that
   // is a change like any other, so it is stored and the Time groups show it.
   function resetToDefaults() {
+    var before = snapshot();
     stored = { rows: {} };
     buildState();
     state.startDate = defaults.startDate;
     state.deliveryDays = defaults.deliveryDays.slice();
     rowOrder.forEach(function (id) { Object.assign(state.rows[id], defaults.rows[id]); });
-    commit({ type: 'defaults' });
+    commit({ type: 'defaults' }, before);
   }
 
   function byPosition(a, b) { return a.position - b.position; }
@@ -436,8 +493,16 @@
     updateRows: updateRows,
     scheduledDayFor: scheduledDayFor,
     dateForScheduledDay: dateForScheduledDay,
-    // fn({ type: 'row' | 'rows' | 'schedule' | 'reset' | 'defaults', rowId,
-    // rowIds }); returns an unsubscribe function.
+    // Takes back the last change; false if there was none.
+    undo: undo,
+    // How many changes undo() can take back.
+    undoCount: function () { return undoHistory.length; },
+    // Puts back the last undone change; false if there was none.
+    redo: redo,
+    // How many undone changes redo() can put back.
+    redoCount: function () { return redoHistory.length; },
+    // fn({ type: 'row' | 'rows' | 'schedule' | 'reset' | 'defaults' | 'undo' |
+    // 'redo', rowId, rowIds }); returns an unsubscribe function.
     subscribe: function (fn) {
       listeners.push(fn);
       return function () { listeners = listeners.filter(function (l) { return l !== fn; }); };

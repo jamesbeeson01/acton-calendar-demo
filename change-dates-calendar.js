@@ -345,7 +345,7 @@
   var hiLegend = null;      // Split: Section under the pointer in the legend
   var weekPreview = null;   // { key, plan } for a hovered + / − button
   var press = null, drag = null, ghost = null;
-  var undoStack = [], flashDates = [];
+  var flashDates = [];
   var model = null;
 
   // Circles and Split draw the same grid of circles; Split also keeps a pane.
@@ -670,24 +670,32 @@
 
   function apply(plan) {
     if (!plan || plan.invalid || !plan.moves.length) return;
-    undoStack.push({
-      sentence: plan.sentence,
-      rows: plan.moves.map(function (mv) {
-        var row = schedule.getRow(mv.id);
-        return { id: row.id, dueDate: row.dueDate, scheduledDay: row.scheduledDay };
-      })
-    });
     flashDates = plan.to.slice();
     schedule.updateRows(plan.moves.map(function (mv) { return { id: mv.id, dueDate: mv.to }; }));
   }
 
-  function undo() {
-    var last = undoStack.pop();
-    if (!last) return;
-    flashDates = unique(last.rows.map(function (row) { return row.dueDate; }));
-    // The Day numbers go back too, in case a row sat on a non-delivery day.
-    schedule.updateRows(last.rows);
-  }
+  // Undo and redo are the Schedule store's, so the Undo and Redo buttons and
+  // their keys take back or put back any change on the page, not only a drop
+  // here: a Start Date or Quest Delivery Days change, a Block Cancel, Reset
+  // dates or Reset to Defaults as well. The dates the rows land on flash when
+  // the store says what it moved.
+  function undo() { if (!drag) schedule.undo(); }
+  function redo() { if (!drag) schedule.redo(); }
+
+  // Ctrl+Z undoes; Ctrl+Y or Ctrl+Shift+Z redoes (Cmd on a Mac). A text field
+  // keeps its own undo, e.g. the Date-select Calendar's Type-in box or a Time
+  // group's time.
+  document.addEventListener('keydown', function (e) {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    var k = e.key.toLowerCase();
+    var isRedo = (k === 'y' && !e.shiftKey) || (k === 'z' && e.shiftKey);
+    if (!isRedo && !(k === 'z' && !e.shiftKey)) return;
+    if (elementAt(e.target, 'textarea, select, [contenteditable=""], [contenteditable="true"], ' +
+      'input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"])')) return;
+    if (!(isRedo ? schedule.redoCount() : schedule.undoCount())) return;
+    e.preventDefault();
+    if (isRedo) redo(); else undo();
+  });
 
   // ---- Details ---------------------------------------------------------------
 
@@ -1030,13 +1038,16 @@
     if (!hasTools()) return '';
     var types = movableTypes();
     var limited = variant === 'full' && !(types.launch && types.challenge && types.close);
+    var undos = schedule.undoCount(), redos = schedule.redoCount();
     return '<div class="dcal-tools">' +
       '<div class="segmented dcal-seg" role="group" aria-label="What a drag moves">' +
       '<button type="button" data-dcal-mode="move" aria-pressed="' + !shiftLater + '">Move dates</button>' +
       '<button type="button" data-dcal-mode="shift" aria-pressed="' + shiftLater + '">Shift later dates</button>' +
       '</div>' +
-      '<button class="' + BTN_OUTLINE + '" type="button" data-dcal-undo' + (undoStack.length ? '' : ' disabled') + '>' +
-      'Undo' + (undoStack.length > 1 ? ' (' + undoStack.length + ')' : '') + '</button>' +
+      '<button class="' + BTN_OUTLINE + '" type="button" data-dcal-undo title="Ctrl+Z"' + (undos ? '' : ' disabled') + '>' +
+      'Undo' + (undos > 1 ? ' (' + undos + ')' : '') + '</button>' +
+      '<button class="' + BTN_OUTLINE + '" type="button" data-dcal-redo title="Ctrl+Y"' + (redos ? '' : ' disabled') + '>' +
+      'Redo' + (redos > 1 ? ' (' + redos + ')' : '') + '</button>' +
       (limited ? '<span class="dcal-note">Apply Changes To limits a drag to the ticked types.</span>' : '') +
       '</div>';
   }
@@ -1450,6 +1461,7 @@
     var modeBtn = elementAt(e.target, '[data-dcal-mode]');
     if (modeBtn) { shiftLater = modeBtn.dataset.dcalMode === 'shift'; render(); return; }
     if (elementAt(e.target, '[data-dcal-undo]')) { undo(); return; }
+    if (elementAt(e.target, '[data-dcal-redo]')) { redo(); return; }
     if (elementAt(e.target, '[data-dcal-earlier]')) { showEarlier = !showEarlier; render(); return; }
     if (elementAt(e.target, '[data-dcal-reset]')) { schedule.reset(); return; }
     var act = elementAt(e.target, '[data-week-act]');
@@ -1466,8 +1478,10 @@
   });
 
   schedule.subscribe(function (change) {
+    if (change.type === 'undo' || change.type === 'redo') {
+      flashDates = unique(change.rowIds.map(function (id) { return schedule.getRow(id).dueDate; }));
+    }
     if (change.type === 'reset') {
-      undoStack = [];
       selection = [];
       pinnedISO = null;
       pinnedSection = null;
