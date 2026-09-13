@@ -30,6 +30,11 @@
   // Reset to defaults block restores leave every row in them without a date.
   var UNSCHEDULED_SECTIONS = ['571802', '571803'];
 
+  // The badge's intended Start Date and delivery days, which the markup's
+  // (September 8 on Mon–Thu) are not. Every dated row keeps its Day number.
+  var DEFAULT_START_DATE = '2026-09-01';
+  var DEFAULT_DELIVERY_DAYS = ['tuesday', 'wednesday', 'thursday'];
+
   // Rows that never had a date. Badge Overview has them in its markup, but
   // Change Dates does not: its capture holds only the rows with a date, since
   // the live page groups rows by due time and an undated row has none. They
@@ -173,17 +178,19 @@
     rowOrder.forEach(function (id) { state.rows[id] = Object.assign({}, seed.rows[id], stored.rows[id]); });
   }
 
-  // The intended original schedule: the markup's own start date, delivery days
-  // and dates, minus the Sections the badge ships unscheduled. It is built
-  // from the seed, not the stored state, so it never moves with a change.
+  // The intended original schedule: the default Start Date and delivery days,
+  // with every dated row moved to the date its markup Day number falls on
+  // there, minus the Sections the badge ships unscheduled. It is built from
+  // the seed, not the stored state, so it never moves with a change.
   var defaults;
 
   function buildDefaults() {
-    defaults = { startDate: seed.startDate, deliveryDays: seed.deliveryDays.slice(), rows: {} };
+    defaults = { startDate: DEFAULT_START_DATE, deliveryDays: DEFAULT_DELIVERY_DAYS.slice(), rows: {} };
     rowOrder.forEach(function (id) {
       var row = seed.rows[id], off = UNSCHEDULED_SECTIONS.indexOf(row.sectionId) !== -1;
+      var date = row.dueDate && row.scheduledDay ? dateForScheduledDay(row.scheduledDay, defaults) : row.dueDate;
       defaults.rows[id] = {
-        dueDate: off ? null : row.dueDate,
+        dueDate: off ? null : date,
         dueTime: off ? null : row.dueTime,
         scheduledDay: off ? null : row.scheduledDay
       };

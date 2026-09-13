@@ -1,5 +1,5 @@
 (function () {
-  // The Guided tour: seventeen steps that walk through the prototype, starting
+  // The Guided tour: eighteen steps that walk through the prototype, starting
   // on Badge Overview and finishing on Change Dates.
   //
   // Each step names the page it belongs to, what to ring, and how to tell it is
@@ -377,7 +377,7 @@
     {
       page: 'change-dates',
       title: 'Reset dates',
-      text: 'You changed too much. Click Reset dates to start over.',
+      text: 'Nevermind. Click Reset dates to start over.',
       ring: function () { return [cal('[data-dcal-reset]')]; },
       scroll: calendarBlock,
       enter: ensureSplit,
@@ -385,16 +385,32 @@
     },
     {
       page: 'change-dates',
+      title: 'Reset to Defaults',
+      text: 'Go back further still: click Reset to Defaults at the bottom of the page, then confirm.',
+      ring: function () { return [resetConfirmButton() || $('[data-reset-defaults]')]; },
+      anchor: function () { return [$('.block-confirm .modal')]; },
+      scroll: function () { return $('#reset-defaults-block'); },
+      done: function () { return changed('defaults'); }
+    },
+    {
+      page: 'change-dates',
       title: 'Undo',
-      text: 'Bad idea. Press Ctrl+Z (⌘Z on a Mac) to undo the reset.',
-      ring: function () { return []; },
+      text: function () {
+        var d = schedule.getDefaultSchedule();
+        return 'The calendar now starts on ' + dayLabel(d.startDate) + ' with Tue, Wed and Thu, and Week 6 and ' +
+          'BONUS are unscheduled. Maybe I Went Too Far. Press Ctrl+Z (⌘Z on a Mac) to undo Reset to Defaults.';
+      },
+      ring: function () { return [cal('.dcal-grid-wrap')]; },
+      anchor: calendarBody,
+      scroll: calendarBlock,
+      enter: ensureSplit,
       done: function () { return changed('undo'); }
     },
     {
       page: 'change-dates',
       title: 'You’re done',
       text: 'That’s the tour. Free roam from here: drag anything, try the other calendar versions, ' +
-        'or change a Time group’s time. Ctrl+Z undoes any change.',
+        'or change a Time group’s time. Ctrl+Z undoes any change. Ctrl+Y redoes it.',
       ring: function () { return []; },
       last: true
     }
@@ -406,6 +422,7 @@
       ring: [$('[data-action*="inline-date-editor#enterEditMode"]')]
     };
   }
+  function resetConfirmButton() { return $('.block-confirm [data-jt-confirm-role="confirm"]'); }
   function calendarBody() { return [cal('.dcal-body')]; }
   function calendarBlock() { return $('#dates-calendar'); }
   function legendDropped(sectionId) {
