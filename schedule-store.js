@@ -30,6 +30,33 @@
   // Reset to defaults block restores leave every row in them without a date.
   var UNSCHEDULED_SECTIONS = ['571802', '571803'];
 
+  // Rows that never had a date. Badge Overview has them in its markup, but
+  // Change Dates does not: its capture holds only the rows with a date, since
+  // the live page groups rows by due time and an undated row has none. They
+  // are listed here, the way section names are, so both pages know the same
+  // rows and a Section's undated rows can be shown on Change Dates too. Id,
+  // Section and position match the Badge Overview markup.
+  var UNDATED_ROWS = [
+    { id: 'challenge_6199771', sectionId: '571802', position: 4, type: 'challenge', title: 'Chocolate River' },
+    { id: 'challenge_6199772', sectionId: '571802', position: 5, type: 'challenge', title: 'Human Tic Tac Toe' },
+    { id: 'challenge_6199773', sectionId: '571802', position: 6, type: 'challenge', title: 'Identity Circles' },
+    { id: 'challenge_6199775', sectionId: '571802', position: 7, type: 'challenge', title: 'Two Truths and a Lie' },
+    { id: 'challenge_6199776', sectionId: '571802', position: 8, type: 'challenge', title: 'Apple, Orange, Mango' },
+    { id: 'challenge_6199774', sectionId: '571802', position: 9, type: 'challenge', title: 'Telephone Charades' },
+    { id: 'challenge_6199769', sectionId: '571802', position: 10, type: 'challenge', title: 'Silent Line-Up' },
+    { id: 'challenge_6199770', sectionId: '571802', position: 11, type: 'challenge', title: 'Guess the Sketch' },
+    { id: 'challenge_6199777', sectionId: '571802', position: 12, type: 'challenge', title: 'Blindfold Obstacle Course' },
+    { id: 'challenge_6199778', sectionId: '571802', position: 13, type: 'challenge', title: 'Elastic Band Bonanza' },
+    { id: 'challenge_6199779', sectionId: '571802', position: 14, type: 'challenge', title: 'Rock, Paper, Scissors Hula Hoop' },
+    { id: 'challenge_6199780', sectionId: '571802', position: 15, type: 'challenge', title: 'Cup Stack' },
+    { id: 'challenge_6199781', sectionId: '571802', position: 16, type: 'challenge', title: 'GAME LIST: Learners Choose!' },
+    { id: 'challenge_6199790', sectionId: '571803', position: 8, type: 'challenge', title: 'Freedom Level Experiment' },
+    { id: 'challenge_6199787', sectionId: '571803', position: 9, type: 'challenge', title: "Hero's Journey" },
+    { id: 'challenge_6199788', sectionId: '571803', position: 10, type: 'challenge', title: 'D.E.A.R' },
+    { id: 'challenge_6199789', sectionId: '571803', position: 11, type: 'challenge', title: 'SMART Goals' },
+    { id: 'challenge_6199786', sectionId: '571803', position: 13, type: 'challenge', title: 'Your First Town Hall' }
+  ];
+
   function pad2(n) { return String(n).padStart(2, '0'); }
   function parseISO(iso) { var p = iso.split('-').map(Number); return new Date(Date.UTC(p[0], p[1] - 1, p[2])); }
   function toISO(d) { return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate()); }
@@ -107,6 +134,19 @@
       bindings[id].articles.push(article);
       var item = article.closest('[data-bulk-time-change-target="challengeItem"]');
       if (item) bindings[id].items.push(item);
+    });
+    // The rows this page has no article for (see UNDATED_ROWS). They are part
+    // of their Section on both pages, so they are seeded with no bindings:
+    // there is nothing on this page to render them into, and renderRow walks
+    // empty binding lists without doing anything.
+    UNDATED_ROWS.forEach(function (row) {
+      if (seed.rows[row.id]) return;
+      seed.rows[row.id] = {
+        id: row.id, type: row.type, title: row.title, sectionId: row.sectionId, position: row.position,
+        dueDate: null, dueTime: null, utcOffset: null, scheduledDay: null
+      };
+      bindings[row.id] = { articles: [], items: [] };
+      rowOrder.push(row.id);
     });
     // Undated rows need an offset in case they are given a date later.
     rowOrder.forEach(function (id) { if (!seed.rows[id].utcOffset) seed.rows[id].utcOffset = defaultOffset; });

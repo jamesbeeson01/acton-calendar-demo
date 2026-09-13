@@ -14,8 +14,11 @@
   //           a single row, all onto another date. The legend is a fourth
   //           grain: hover a Section to light up its dates and list its rows,
   //           click to keep them, drag it onto a date to lay the whole Section
-  //           out from there. A click on empty space, in the Block or outside
-  //           it, lets the pane go again.
+  //           out from there. It is also where a Section's unscheduled rows
+  //           are reached, the grid being drawn from dates and having none to
+  //           draw them on: they are listed last in the pane, and dragging
+  //           one onto a date schedules it. A click on empty space, in the
+  //           Block or outside it, lets the pane go again.
   //   Middle  the same drag plus Shift later dates, Undo, and a details panel
   //           under the calendar.
   //   Full    Section ribbons, multi-date selection, week insert/remove, row
@@ -45,7 +48,7 @@
   var HINTS = {
     simple: 'Drag a date onto another date. An empty date takes its rows; a date that has rows swaps with it. Hover a date to see what is scheduled.',
     circles: 'Drag a date onto another date, the same as Simple. A filled circle is a scheduled date, coloured by its Section; a date holding more than one Section is split into a pie by row count. Hover a date to see its rows.',
-    split: 'The same grid and drag as Circles, with the details in the pane on the left and the Section legend on the right. Click a date to keep it in the pane, then drag a row, or a Section header, out of the pane onto another date. Hover a Section in the legend to light up its dates and list its rows, click it to keep them, or drag it onto a date to lay the whole Section out from there on the delivery days. Click empty space, or anywhere outside the Block, to let the pane go.',
+    split: 'The same grid and drag as Circles, with the details in the pane on the left and the Section legend on the right. Click a date to keep it in the pane, then drag a row, or a Section header, out of the pane onto another date. Hover a Section in the legend to light up its dates and list its rows, click it to keep them, or drag it onto a date to lay the whole Section out from there on the delivery days. A Section holding rows with no date says how many beside its legend item and lists them under Unscheduled at the foot of the pane; drag one of those onto a date to schedule it, the same drag a dated row takes. Click empty space, or anywhere outside the Block, to let the pane go.',
     middle: 'Drag a date onto another date to move or swap it. With Shift later dates on, that date and every date after it move together. Click a date to keep it in the panel below.',
     full: 'Click a date to select it, Shift-click for a range, Ctrl-click to add one. Drag the selection to move it, drag a row out of the panel to move just that row, or use + and − beside a week to insert or remove a week.'
   };
@@ -90,8 +93,7 @@
     '.dcal-d.is-alt-month{background:var(--bg-offset)}' +
     // Non-delivery days still take a drop, but are hatched as off-schedule.
     '.dcal-d.is-off{background-image:repeating-linear-gradient(135deg,transparent 0 5px,var(--border-1) 5px 6px)}' +
-    '.dcal-d.has-rows{cursor:grab}' +
-    '.dcal.is-dragging,.dcal.is-dragging *{cursor:grabbing!important}' +
+    '.dcal-d.has-rows{cursor:pointer}' +
     '.dcal-d-top{align-items:center;display:flex;gap:3px;justify-content:space-between}' +
     '.dcal-d.is-narrow .dcal-d-top{justify-content:center}' +
     '.dcal-num{align-items:center;border-radius:var(--radius-pill);color:var(--fg-1);display:inline-flex;font-size:11px;height:18px;justify-content:center;min-width:18px}' +
@@ -167,7 +169,7 @@
     // Split: a legend item is a handle as well as a key, so it takes the pane
     // handles' padding and hover fill; the negative margin keeps the gap the
     // legend has in Circles. Kept picked while its rows are held in the pane.
-    '.dcal[data-variant="split"] .dcal-legend-item{border-radius:6px;cursor:grab;margin:-3px -4px;padding:3px 4px}' +
+    '.dcal[data-variant="split"] .dcal-legend-item{border-radius:6px;cursor:pointer;margin:-3px -4px;padding:3px 4px}' +
     '.dcal[data-variant="split"] .dcal-legend-item:hover{background:var(--bg-subtle);color:var(--fg-1)}' +
     '.dcal[data-variant="split"] .dcal-legend-item.is-picked{background:var(--accent-tint);box-shadow:inset 0 0 0 1px var(--accent);color:var(--fg-1)}' +
     '.dcal[data-variant="split"] .dcal-legend-item.is-drag-source{opacity:.45}' +
@@ -184,6 +186,15 @@
     '.dcal-legend{color:var(--fg-3);display:flex;flex-wrap:wrap;font-size:11px;gap:4px 12px;margin-top:8px}' +
     '.dcal-legend-item{align-items:center;display:inline-flex;gap:5px}' +
     '.dcal-swatch{background:var(--dm);border-radius:3px;flex:none;height:10px;width:10px}' +
+    // A Section with nothing on the grid: the swatch is an outline, because the
+    // colour stands for dates and this Section has none.
+    '.dcal-swatch.is-hollow{background:none;box-shadow:inset 0 0 0 1.5px var(--dm)}' +
+    // How many of a Section's rows have no date, after its name in the legend.
+    // The outline says the same thing the hollow swatch does: no date yet. It
+    // runs on from the name rather than sitting in a column of its own, so a
+    // name that wraps keeps it on the last line instead of stranding it.
+    '.dcal-legend-name{flex:1;min-width:0}' +
+    '.dcal-legend-count{border:1px dashed var(--border-3);border-radius:var(--radius-pill);color:var(--fg-3);font-size:10px;font-variant-numeric:tabular-nums;margin-left:4px;padding:0 4px;white-space:nowrap}' +
     // Details, shared by the Simple popup and the Middle / Full panel.
     '.dcal-panel{background:var(--bg-surface);border:1px solid var(--border-1);border-radius:var(--radius-md);font-size:12px;min-height:110px;padding:10px 12px;-webkit-user-select:none;user-select:none}' +
     '.dcal-pop{background:var(--bg-surface);border:1px solid var(--border-1);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);font-size:12px;max-width:calc(100vw - 16px);padding:10px 12px;pointer-events:none;position:fixed;width:310px;z-index:210}' +
@@ -198,17 +209,18 @@
     '.dcal-det-rows{display:flex;flex-direction:column;gap:2px;list-style:none;margin:0;padding:0}' +
     '.dcal-det-row{align-items:center;border-radius:6px;cursor:pointer;display:flex;gap:6px;padding:3px 4px}' +
     '.dcal-det-row:hover{background:var(--bg-subtle)}' +
-    '.dcal[data-variant="full"] .dcal-det-row,.dcal[data-variant="split"] .dcal-det-row{cursor:grab}' +
     // Split: a Section header is a handle too, so it takes a row's padding and
     // hover fill. The margin loses what the padding adds, keeping the spacing
     // the other prototypes have.
-    '.dcal[data-variant="split"] .dcal-det-sec{border-radius:6px;cursor:grab;margin:5px 0 0;padding:3px 4px}' +
+    '.dcal[data-variant="split"] .dcal-det-sec{border-radius:6px;cursor:pointer;margin:5px 0 0;padding:3px 4px}' +
     '.dcal[data-variant="split"] .dcal-det-sec:hover{background:var(--bg-subtle)}' +
     // Split, one Section in the pane: the date head stands in for the Section
     // header, so it is the handle for that date's rows and looks like one.
-    '.dcal[data-variant="split"] .dcal-det-head--handle{border-radius:6px;cursor:grab;margin:0 -4px;padding:3px 4px}' +
+    '.dcal[data-variant="split"] .dcal-det-head--handle{border-radius:6px;cursor:pointer;margin:0 -4px;padding:3px 4px}' +
     '.dcal[data-variant="split"] .dcal-det-head--handle:hover{background:var(--bg-subtle)}' +
     '.dcal-det-date--sec{align-items:center;display:inline-flex;gap:6px}' +
+    '.dcal-det--unsched .dcal-det-date{color:var(--fg-2)}' +
+    '.dcal-det--unsched .dcal-empty{margin:1px 0 4px}' +
     '.dcal-det-row.is-locked{opacity:.5}' +
     '.dcal-det-row .cl-pill{flex:none}' +
     '.dcal-det-title{color:var(--fg-1);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
@@ -323,7 +335,11 @@
   var selectAnchor = null;  // Full: Shift-click anchor
   var pinnedISO = null;     // Middle / Split: date kept in the panel
   var pinnedSection = null; // Split: Section kept in the pane from the legend
-  var hoverISO = null, lastHoverISO = null;
+  // The last date and the last legend Section hovered. The pane falls back to
+  // whichever was hovered more recently, so it holds still when the pointer
+  // leaves the grid or the legend and moves into the pane to drag a row out.
+  // Only one of the two is ever set: the newer hover clears the other.
+  var hoverISO = null, lastHoverISO = null, lastLegendSec = null;
   var linkedISO = null;     // date of the Schedule row under the pointer
   var hiSection = null;     // Section under the pointer
   var hiLegend = null;      // Split: Section under the pointer in the legend
@@ -363,12 +379,29 @@
   function buildModel() {
     deliv = schedule.getDeliveryDays().map(function (d) { return WEEKDAYS.indexOf(d); });
     var types = movableTypes();
-    var rows = schedule.getRows().filter(function (row) { return row.dueDate; });
+    var all = schedule.getRows();
+    var rows = all.filter(function (row) { return row.dueDate; });
     var byDate = {}, rowById = {};
     rows.forEach(function (row) {
       row.movable = !!types[row.type];
       rowById[row.id] = row;
       (byDate[row.dueDate] || (byDate[row.dueDate] = [])).push(row);
+    });
+    // Rows with no date at all. The grid has nowhere to draw them, so they are
+    // kept by Section for the Split pane to list under the Section they belong
+    // to; every other view leaves them out, as it always has. They go into
+    // rowById with the rest, because dragging one onto a date is how it gets
+    // scheduled, and a drag looks its row up there.
+    var unschedBySection = {};
+    all.forEach(function (row) {
+      if (row.dueDate) return;
+      row.movable = !!types[row.type];
+      rowById[row.id] = row;
+      (unschedBySection[row.sectionId] || (unschedBySection[row.sectionId] = [])).push(row);
+    });
+    // In their Section's own order, since they have no date to order them by.
+    Object.keys(unschedBySection).forEach(function (id) {
+      unschedBySection[id].sort(function (a, b) { return a.position - b.position; });
     });
     Object.keys(byDate).forEach(function (iso) {
       byDate[iso].sort(function (a, b) {
@@ -396,6 +429,7 @@
 
     return {
       rows: rows, rowById: rowById, byDate: byDate, dates: dates,
+      unschedBySection: unschedBySection,
       startDate: startDate, anchor: anchor, firstWeek: firstWeek, lastWeek: lastWeek,
       lastDate: addDays(lastWeek, 6), inRangeEnd: latest, hidden: hidden, wide: wide
     };
@@ -410,6 +444,11 @@
   // shows in the pane and lays out again when it is dragged.
   function sectionDates(sectionId) {
     return model.dates.filter(function (iso) { return sectionRowsOn(iso, sectionId).length > 0; });
+  }
+  // One Section's undated rows, in page order: the group the Split pane lists
+  // under the Section's date groups.
+  function sectionUnscheduled(sectionId) {
+    return (variant === 'split' && model.unschedBySection[sectionId]) || [];
   }
   // The Section the grid is lighting up: hovered anywhere, or kept by a click
   // on its legend item.
@@ -563,6 +602,16 @@
     var row = model.rowById[rowId];
     if (!row || row.dueDate === target) return null;
     if (!row.movable) return invalidPlan('Apply Changes To leaves ' + TYPE_LABEL[row.type] + ' rows out.');
+    // A row with no date is coming from nowhere rather than moving, so nothing
+    // is left behind: from is empty, and the sentence says schedule, not move.
+    if (!row.dueDate) {
+      return {
+        tag: 'Schedule', moves: [{ id: row.id, to: target }], from: [], to: [target],
+        select: [target], doubled: [],
+        sentence: 'Schedule “' + row.title + '” on ' + dayLabel(target) + '.' +
+          (isDelivery(target) ? '' : ' ' + shortDate(target) + ' is not a delivery day.')
+      };
+    }
     return {
       tag: 'Move row', moves: [{ id: row.id, to: target }], from: [row.dueDate], to: [target],
       select: [target], doubled: [],
@@ -688,25 +737,65 @@
     return out + '</div>';
   }
 
+  // Split: one Section's undated rows, in the shape a date group has, so they
+  // read as one more group under the dates — the grid can't show them, being
+  // drawn from dates, so the pane is the only place they are listed, and
+  // dragging one out of here onto a date is what gives it one.
+  function unscheduledDetailsHTML(rows) {
+    var out = '<div class="dcal-det dcal-det--unsched"><div class="dcal-det-head">' +
+      '<span class="dcal-det-date">Unscheduled</span>' +
+      '<span class="dcal-det-meta">' + esc(rowsLabel(rows.length)) + '</span></div>' +
+      '<p class="dcal-empty">Drag one onto a date to schedule it.</p>' +
+      '<ul class="dcal-det-rows">';
+    rows.forEach(function (row) {
+      out += '<li class="dcal-det-row is-unscheduled" data-row-id="' + esc(row.id) + '">' +
+        '<span class="cl-pill cl-pill--' + row.type + '">' + TYPE_LABEL[row.type] + '</span>' +
+        '<span class="dcal-det-title">' + esc(row.title) + '</span>' +
+        '<span class="dcal-det-time">No date</span></li>';
+    });
+    return out + '</ul></div>';
+  }
+
   // Split: a whole Section in the pane, in the shape a date's details have —
-  // the Section named once at the top, then one block per date it covers.
+  // the Section named once at the top, then one block per date it covers, and
+  // last the Section's undated rows.
   function sectionDetailsHTML(sectionId, opts) {
     var section = sectionOf({ sectionId: sectionId });
     var dates = sectionDates(sectionId);
+    var unsched = sectionUnscheduled(sectionId);
     var total = dates.reduce(function (n, iso) { return n + sectionRowsOn(iso, sectionId).length; }, 0);
-    var meta = [rowsLabel(total)];
+    var meta = [];
+    if (total || !unsched.length) meta.push(rowsLabel(total));
     if (dates.length) {
       meta.push(dates.length === 1 ? shortDate(dates[0]) :
         shortDate(dates[0]) + ' – ' + shortDate(dates[dates.length - 1]));
     }
+    if (unsched.length) meta.push(unsched.length + ' unscheduled');
     var out = '<div class="dcal-det"><div class="dcal-det-head">' +
-      '<span class="dcal-det-date dcal-det-date--sec"><span class="dcal-swatch" style="--dm:' +
+      '<span class="dcal-det-date dcal-det-date--sec"><span class="dcal-swatch' +
+      (dates.length ? '' : ' is-hollow') + '" style="--dm:' +
       section.color + '"></span>' + esc(section.name) + '</span>' +
       '<span class="dcal-det-meta">' + esc(meta.join(' · ')) + '</span></div>';
-    if (!dates.length) return out + '<p class="dcal-empty">Nothing scheduled.</p></div>';
+    if (!dates.length && !unsched.length) return out + '<p class="dcal-empty">Nothing scheduled.</p></div>';
     if (opts && opts.hint) out += '<p class="dcal-empty" style="margin-top:6px">' + esc(opts.hint) + '</p>';
     out += '</div>';
-    return out + dates.map(function (iso) { return detailsHTML(iso, { section: sectionId }); }).join('');
+    return out + dates.map(function (iso) { return detailsHTML(iso, { section: sectionId }); }).join('') +
+      (unsched.length ? unscheduledDetailsHTML(unsched) : '');
+  }
+
+  // Split: what a legend item under the pointer can be told to do. A Section
+  // with nothing scheduled has no dates to lay out again, so its item is not
+  // a drag source; its rows still are, one at a time, out of the Unscheduled
+  // group.
+  function sectionHint(sectionId, kept) {
+    if (!sectionDates(sectionId).length) {
+      return (kept ? 'Kept here. ' : '') + 'None of it is scheduled, so there is no layout to drag: ' +
+        'drag a row onto a date to schedule it.' +
+        (kept ? ' Click the legend item again to let it go.' : ' Click to keep it here.');
+    }
+    return kept ?
+      'Kept here. Drag it onto a date to lay the Section out from there, or click it again to let go.' :
+      'Drag it onto a date to lay the Section out from there, or click to keep it here.';
   }
 
   // What the panel or popup shows right now.
@@ -720,9 +809,7 @@
     }
     // A legend item under the pointer takes the pane, the way a date does.
     if (hiLegend) {
-      return sectionDetailsHTML(hiLegend, { hint: hiLegend === pinnedSection ?
-        'Kept here. Drag it onto a date to lay the Section out from there, or click it again to let go.' :
-        'Drag it onto a date to lay the Section out from there, or click to keep it here.' });
+      return sectionDetailsHTML(hiLegend, { hint: sectionHint(hiLegend, hiLegend === pinnedSection) });
     }
     if (hoverISO) return detailsHTML(hoverISO);
     if (linkedISO) return detailsHTML(linkedISO);
@@ -737,13 +824,16 @@
       return detailsHTML(selection[0], { hint: 'Drag a row onto another date to move just that row.' });
     }
     if (pinnedSection) {
-      return sectionDetailsHTML(pinnedSection,
-        { hint: 'Drag a date or a row from here, or the legend item onto a date to move all of it. ' +
+      return sectionDetailsHTML(pinnedSection, { hint: sectionDates(pinnedSection).length ?
+        'Drag a date or a row from here, or the legend item onto a date to move all of it. ' +
+          'Click the legend item again to let it go.' :
+        'None of it is scheduled. Drag a row from here onto a date to schedule it. ' +
           'Click the legend item again to let it go.' });
     }
     var restHint = variant === 'split' ?
       { hint: 'Drag a row, or a Section header, onto another date to move just those rows.' } : null;
     if (hasPin() && pinnedISO) return detailsHTML(pinnedISO, restHint);
+    if (lastLegendSec) return sectionDetailsHTML(lastLegendSec, { hint: sectionHint(lastLegendSec, false) });
     if (lastHoverISO) return detailsHTML(lastHoverISO, restHint);
     return '<p class="dcal-empty">Hover a date to see what is scheduled on it' +
       (variant === 'full' ? ', or click one to select it.' :
@@ -913,13 +1003,26 @@
     model.rows.forEach(function (row) {
       if (row.dueDate >= model.firstWeek && shown.indexOf(row.sectionId) === -1) shown.push(row.sectionId);
     });
+    // Split: a Section every one of whose rows is unscheduled draws nothing on
+    // the grid, so it would drop out of the legend and its rows would have
+    // nowhere to be seen. Keep its item, as the way into them in the pane.
+    if (variant === 'split') {
+      Object.keys(model.unschedBySection).forEach(function (id) {
+        if (shown.indexOf(id) === -1) shown.push(id);
+      });
+    }
     shown.sort(function (a, b) { return sectionOf({ sectionId: a }).order - sectionOf({ sectionId: b }).order; });
     if (!shown.length) return '';
     var side = isCircles() ? ' dcal-legend--side' + (variant === 'split' ? ' is-right' : '') : '';
     return '<div class="dcal-legend' + side + '">' + shown.map(function (id) {
       var section = sectionOf({ sectionId: id });
-      return '<span class="dcal-legend-item" data-sec="' + esc(id) + '">' +
-        '<span class="dcal-swatch" style="--dm:' + section.color + '"></span>' + esc(section.name) + '</span>';
+      var unsched = sectionUnscheduled(id).length;
+      var bare = !sectionDates(id).length;
+      return '<span class="dcal-legend-item" data-sec="' + esc(id) + '"' +
+        (unsched ? ' title="' + esc(rowsLabel(unsched) + ' with no date') + '"' : '') + '>' +
+        '<span class="dcal-swatch' + (bare ? ' is-hollow' : '') + '" style="--dm:' + section.color + '"></span>' +
+        '<span class="dcal-legend-name">' + esc(section.name) +
+        (unsched ? '<span class="dcal-legend-count">' + unsched + '</span>' : '') + '</span></span>';
     }).join('') + '</div>';
   }
 
@@ -1001,6 +1104,9 @@
     // Split: the dates of the Section under the pointer, or of the one a click
     // on the legend is keeping, take the ring a hovered Schedule row gives.
     var secOn = activeSection();
+    // A Section with nothing on the grid has no date to light and none to dim,
+    // so the grid is left alone and only the pane answers the hover.
+    if (secOn && !sectionDates(secOn).length) secOn = null;
     var secDates = !drag && secOn && variant === 'split' ? sectionDates(secOn) : [];
 
     Array.prototype.forEach.call(mount.querySelectorAll('.dcal-d[data-date]'), function (cell) {
@@ -1094,7 +1200,8 @@
     var changed = iso !== hoverISO || sec !== hiSection || leg !== hiLegend || linked !== linkedISO ||
       actKey !== (weekPreview && weekPreview.key);
     hoverISO = iso;
-    if (iso) lastHoverISO = iso;
+    if (iso) { lastHoverISO = iso; lastLegendSec = null; }
+    if (leg) { lastLegendSec = leg; lastHoverISO = null; }
     hiSection = sec;
     hiLegend = leg;
     linkedISO = linked;
@@ -1136,7 +1243,9 @@
     if (press.rowId) {
       var row = model.rowById[press.rowId];
       if (!canDragRow() || !row) return false;
-      drag = { kind: 'row', rowId: press.rowId, sources: [row.dueDate], anchor: row.dueDate, target: null, plan: null };
+      // A row with no date has no source cell for the grid to mark.
+      drag = { kind: 'row', rowId: press.rowId, sources: row.dueDate ? [row.dueDate] : [],
+        anchor: row.dueDate, target: null, plan: null };
     } else if (press.legendSec) {
       var secDrag = canDragSection() ? sectionDates(press.legendSec) : [];
       if (!secDrag.length) return false;
@@ -1313,6 +1422,9 @@
     var article = document.getElementById(rowId);
     if (!article) return;
     var item = article.closest('[data-bulk-time-change-target="challengeItem"]') || article;
+    // An unscheduled row's Preview item is hidden, so there is nothing below
+    // the calendar to scroll to.
+    if (!item.offsetParent) return;
     item.scrollIntoView({ block: 'center', behavior: 'smooth' });
     item.classList.add('dcal-row-flash');
     setTimeout(function () { item.classList.remove('dcal-row-flash'); }, 1400);
@@ -1331,6 +1443,7 @@
       pinnedSection = null;
       hiSection = null;
       hiLegend = null;
+      lastLegendSec = null;
       render();
       return;
     }
