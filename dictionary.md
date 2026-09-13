@@ -25,7 +25,19 @@ passing the files through Jekyll.
 
 | Term | What it is | Code hook |
 |---|---|---|
-| **Copy notice** | Dark pill fixed at the bottom centre of both pages saying this is a prototype copy, not a real Journey Tracker page. Clicks pass through it; hidden when printing. | `.copy-notice` |
+| **Copy notice** | Dark pill fixed at the bottom centre of both pages saying this is a prototype copy, not a real Journey Tracker page. Clicks pass through it, except on the Tour button inside it; hidden when printing. | `.copy-notice` |
+
+## Guided tour (both pages, `guided-tour.js`)
+
+Seventeen steps that start on Badge Overview and finish on Change Dates. A step that asks for something (a click, a date, a drag) moves on by itself once it is done; a step that only points something out waits for Next. The step in progress is kept in sessionStorage, so the tour carries on across the Change Dates button and ends with the tab. Starting the tour calls the Schedule store's `reset()`, so the dates the steps name are the dates on screen; Change Dates steps switch the Change Dates calendar to Split. Nothing else is changed by the tour itself.
+
+| Term | What it is | Code hook |
+|---|---|---|
+| **Tour card** | Floating card showing the step number and page, the step's title and instruction, an optional progress line (e.g. "2 of 3 days"), and Back, Next / Skip and an X that ends the tour. Sits beside what the step points at on whichever side has room, else in a corner, keeping clear of the Copy notice. A step on the other page shows a "Go to …" button instead. | `.tour-card` |
+| **Welcome card** | The Tour card before step 1, on Badge Overview: Start tour or Not now. Shown on a first visit, on the Tour button, and with `?tour` on the URL. | `.tour-card [data-tour="start"]` |
+| **Tour ring** | Pulsing accent outline over each element a step points at. Clicks pass through it. | `.tour-ring` |
+| **Tour button** | "Take the tour" inside the Copy notice, hidden while the tour runs. On Badge Overview it opens the Welcome card; on Change Dates it starts the tour on Badge Overview. | `.tour-launch` |
+| **Tour steps** | The list the tour runs, each with its page, ring, done test and text. The dates they name (Start Date Sep 14 on Mon, Wed, Thu; Sep 30 moved to Sep 29) are constants at the top of the file. | `steps` in `guided-tour.js`; `journey-tracker-tour-step` (sessionStorage), `journey-tracker-tour-seen` (localStorage) |
 
 ## Layout
 

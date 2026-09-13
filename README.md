@@ -18,4 +18,6 @@ The latter calendar has the following features:
 7. Undo with ctrl + z
 8. Reset, save, and cancel buttons
 
+A guided tour walks through both calendars, starting on the badge overview page. It opens on a first visit, and "Take the tour" in the notice at the bottom of either page starts it again.
+
 Also, for convenience, added save/cancel buttons at the bottom of each div on the page, and a reset to defaults button to return to the original state before any edits.
